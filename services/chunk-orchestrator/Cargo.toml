@@ -1,0 +1,10 @@
+[package]
+name = "chunk-orchestrator"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "chunk-orchestrator"
+path = "src/main.rs"
+
+[dependencies]

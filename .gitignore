@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+.next/
+out/
+coverage/
+dist/
+.env
+.env.*
+!.env.example
+target/
+.DS_Store
