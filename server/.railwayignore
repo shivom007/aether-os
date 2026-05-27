@@ -1,0 +1,8 @@
+aether.db
+*.exe
+main
+main.exe
+api.exe
+.DS_Store
+/storage/
+tmp/
