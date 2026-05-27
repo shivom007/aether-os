@@ -38,6 +38,7 @@ Thumbs.db
 temp_railway/
 dashboard.zip
 simulate_upload.bin
+.wrangler/
 
 # Storage shards (never push user data)
 server/storage/
