@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     // Issue dashboard JWT cookies
     const userId = email.toLowerCase()
     const access = await signAccessToken({ sub: userId, email: email.toLowerCase() })
-    const { token: refresh } = newRefreshToken()
+    const { token: refresh } = await newRefreshToken()
     await setAuthCookies(access, refresh)
 
     // Store Go backend JWT

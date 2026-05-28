@@ -8,7 +8,7 @@ export async function POST() {
   if (!s) return fail("invalid refresh", 401)
 
   const access = await signAccessToken({ sub: s.sub, email: s.email })
-  const { token: refresh } = newRefreshToken()
+  const { token: refresh } = await newRefreshToken()
   await setAuthCookies(access, refresh)
   return ok({ ok: true })
 }

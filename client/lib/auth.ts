@@ -1,6 +1,5 @@
 import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
-import { createHash, randomBytes } from "node:crypto"
 import type { SessionUser } from "./types"
 
 const ACCESS_TTL_SEC = 15 * 60
@@ -32,15 +31,33 @@ export async function verifyAccessToken(token: string): Promise<SessionUser | nu
   }
 }
 
+// Convert a buffer to hex
+function toHex(buffer: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+}
+
+// Base64URL string
+function toBase64Url(buffer: Uint8Array): string {
+  const base64 = btoa(String.fromCharCode(...buffer))
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
+}
+
 // Refresh tokens are random opaque strings. We store a SHA-256 hash in DB.
-export function newRefreshToken(): { token: string; hash: string; expiresAt: Date } {
-  const token = randomBytes(32).toString("base64url")
-  const hash = createHash("sha256").update(token).digest("hex")
+export async function newRefreshToken(): Promise<{ token: string; hash: string; expiresAt: Date }> {
+  const randomBytes = new Uint8Array(32)
+  crypto.getRandomValues(randomBytes)
+  const token = toBase64Url(randomBytes)
+  const hash = await hashRefreshToken(token)
   const expiresAt = new Date(Date.now() + REFRESH_TTL_SEC * 1000)
   return { token, hash, expiresAt }
 }
-export function hashRefreshToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex")
+
+export async function hashRefreshToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token)
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
+  return toHex(hashBuffer)
 }
 
 // --- cookie helpers (Next.js 16 — cookies() is async) ---
