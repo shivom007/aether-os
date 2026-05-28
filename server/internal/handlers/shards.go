@@ -49,17 +49,15 @@ func AllocateShards(c *fiber.Ctx) error {
 	var userProviders []models.UserProvider
 	db.DB.Where("user_id = ?", userID).Find(&userProviders)
 
+	if len(userProviders) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "No storage providers linked. Please link a provider to upload files."})
+	}
+
 	var allocations []ShardAllocationResponse
-	mockProviderNames := []string{"GoogleDrive", "AWS_S3", "Dropbox"}
 	
 	for i := 0; i < 14; i++ {
-		var providerName string
-		if len(userProviders) > 0 {
-			p := userProviders[i%len(userProviders)]
-			providerName = fmt.Sprintf("UserProvider_%d", p.ID)
-		} else {
-			providerName = mockProviderNames[i%len(mockProviderNames)]
-		}
+		p := userProviders[i%len(userProviders)]
+		providerName := fmt.Sprintf("UserProvider_%d", p.ID)
 		
 		shard := models.Shard{
 			ChunkID:        chunk.ID,
