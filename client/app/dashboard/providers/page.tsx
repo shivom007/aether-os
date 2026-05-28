@@ -24,6 +24,12 @@ export default function ProvidersPage() {
     refetchInterval: 30_000,
   })
 
+  const { data: latencies } = useQuery({
+    queryKey: ["provider-latencies"],
+    queryFn: () => api<Record<string, number>>("/api/providers/latency"),
+    refetchInterval: 15_000,
+  })
+
   const check = useMutation({
     mutationFn: (id: string) => api(`/api/providers/${id}/health`, { method: "POST" }),
     onSuccess: () => {
@@ -46,14 +52,14 @@ export default function ProvidersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex items-center justify-between gap-4">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Providers</h1>
           <p className="text-sm text-muted-foreground">
             Object-storage backends receiving erasure-coded shards. Access tokens are encrypted at rest.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => (window.location.href = "/api/providers/oauth?provider=google")}>
             <Cloud className="mr-2 h-4 w-4" aria-hidden />
             Google Drive
@@ -69,7 +75,7 @@ export default function ProvidersPage() {
         </div>
       </header>
 
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -105,39 +111,50 @@ export default function ProvidersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((p) => (
+              rows.map((p) => {
+                const latency = latencies?.[p.id]
+                const latencyColor = latency ? (latency < 200 ? "text-emerald-500" : latency < 600 ? "text-yellow-500" : "text-destructive") : ""
+                
+                return (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono uppercase text-xs">{p.provider_type}</TableCell>
                   <TableCell>
-                    <span className="font-mono text-xs">
+                    <span className="font-mono text-xs whitespace-nowrap">
                       {p.endpoint_url ? `${p.endpoint_url} / ` : ""}
                       {p.bucket}
                     </span>
                   </TableCell>
                   <TableCell className="text-sm">{p.region || "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{relativeTime(p.created_at)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{relativeTime(p.created_at)}</TableCell>
                   <TableCell>
-                    <span
-                      className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                        p.status === "healthy"
-                          ? "text-emerald-500"
-                          : p.status === "unhealthy"
-                            ? "text-destructive"
-                            : "text-muted-foreground"
-                      }`}
-                    >
+                    <div className="flex flex-col gap-1">
                       <span
-                        aria-hidden
-                        className={`size-2 rounded-full ${
+                        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
                           p.status === "healthy"
-                            ? "bg-emerald-500"
+                            ? "text-emerald-500"
                             : p.status === "unhealthy"
-                              ? "bg-destructive"
-                              : "bg-muted-foreground"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
                         }`}
-                      />
-                      {p.status}
-                    </span>
+                      >
+                        <span
+                          aria-hidden
+                          className={`size-2 rounded-full ${
+                            p.status === "healthy"
+                              ? "bg-emerald-500"
+                              : p.status === "unhealthy"
+                                ? "bg-destructive"
+                                : "bg-muted-foreground"
+                          }`}
+                        />
+                        {p.status}
+                      </span>
+                      {latency !== undefined && (
+                        <span className={`text-[10px] font-mono ${latencyColor}`}>
+                          {latency}ms
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
@@ -163,7 +180,8 @@ export default function ProvidersPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                )
+              })
             )}
           </TableBody>
         </Table>

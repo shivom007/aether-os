@@ -91,28 +91,51 @@ export function StreamingEngine({ volumeId, masterKey }: StreamingEngineProps) {
             streamingMetaCache.set(inodeId, { inode: data.inode, chunks: data.chunks })
           }
 
-          const { inode } = streamingMetaCache.get(inodeId)!
+          const { inode, chunks } = streamingMetaCache.get(inodeId)!
 
           const CHUNK_SIZE = 5 * 1024 * 1024
-          let startByte = 0
+          let reqStartByte = 0
+          let reqEndByte: number | undefined
           if (rangeHeader) {
-            const match = rangeHeader.match(/bytes=(\d+)-/)
-            if (match) startByte = parseInt(match[1], 10)
+            const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+            if (match) {
+              reqStartByte = parseInt(match[1], 10)
+              if (match[2]) reqEndByte = parseInt(match[2], 10)
+            }
           }
 
-          const chunkIndex = Math.floor(startByte / CHUNK_SIZE)
-          console.log(`[Streaming] Requested startByte: ${startByte}. Fetching chunk: ${chunkIndex}`)
+          const chunkIndex = Math.floor(reqStartByte / CHUNK_SIZE)
+          console.log(`[Streaming] Requested startByte: ${reqStartByte}. Fetching chunk: ${chunkIndex}`)
 
-          // Decrypt current chunk (will use cache if available)
+          const targetShards = chunks.filter((c: any) => c.chunk_index === chunkIndex)
+          if (targetShards.length === 0) throw new Error(`Chunk ${chunkIndex} missing from DB`)
+
+          const fetchedShards = await fetchMinimumShards(targetShards, async (shardId, signal) => {
+            if (prefetchShardCache.has(shardId)) {
+              return await prefetchShardCache.get(shardId)!
+            }
+            const res = await fetch(`/api/shards/${shardId}`, { signal })
+            if (!res.ok) throw new Error(`Shard ${shardId} returned ${res.status}`)
+            const buffer = await res.arrayBuffer()
+            return new Uint8Array(buffer)
+          })
+
+          // 5. Decrypt current chunk (will use cache if available)
           const plaintext = await getDecryptedChunk(inodeId, chunkIndex)
-          
-          // Calculate exact byte range to return
-          const chunkStartByte = chunkIndex * CHUNK_SIZE
-          const offsetInsideChunk = startByte - chunkStartByte
-          const sliceToReturn = plaintext.slice(offsetInsideChunk)
-          const endByte = chunkStartByte + plaintext.length - 1
 
-          // Send success response to SW
+          // 6. Calculate exact byte range to return
+          const chunkStartByte = chunkIndex * CHUNK_SIZE
+          const offsetInsideChunk = reqStartByte - chunkStartByte
+          
+          let sliceEnd = plaintext.length
+          if (reqEndByte !== undefined && reqEndByte !== null) {
+            sliceEnd = Math.min(reqEndByte - chunkStartByte + 1, plaintext.length)
+          }
+          
+          const sliceToReturn = plaintext.slice(offsetInsideChunk, sliceEnd)
+          const actualEndByte = chunkStartByte + offsetInsideChunk + sliceToReturn.length - 1
+
+          // 7. Send success response to SW
           const sw = (event.source as ServiceWorker) || navigator.serviceWorker.controller
           if (sw) {
             sw.postMessage({
@@ -122,7 +145,7 @@ export function StreamingEngine({ volumeId, masterKey }: StreamingEngineProps) {
               status: 206,
               headers: {
                 "Content-Type": inode.mime_type || "application/octet-stream",
-                "Content-Range": `bytes ${startByte}-${endByte}/${inode.size_bytes}`,
+                "Content-Range": `bytes ${reqStartByte}-${actualEndByte}/${inode.size_bytes}`,
                 "Accept-Ranges": "bytes",
                 "Content-Length": String(sliceToReturn.length)
               }

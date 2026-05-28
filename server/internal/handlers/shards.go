@@ -145,7 +145,6 @@ func DownloadShardHandler(c *fiber.Ctx) error {
 		fmt.Printf("DownloadShard failed for shard %s (provider %s): %v\n", shardIDStr, shard.Provider, err)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to download shard from provider"})
 	}
-	defer reader.Close()
 
 	c.Set("Content-Type", "application/octet-stream")
 	return c.SendStream(reader)

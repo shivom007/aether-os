@@ -41,16 +41,22 @@ export function randomBytes(n: number): Uint8Array {
 }
 
 // --------------------------------------------------------------------
-// Master key derivation: PBKDF2-SHA256, 310_000 iters, 32-byte output
+// Master key derivation: Argon2id (via Web Worker), 32-byte output
 // --------------------------------------------------------------------
 export async function derive_master_key(password: string, salt: Uint8Array): Promise<{ masterKey: CryptoKey, fingerprint: string }> {
-  const km = await crypto.subtle.importKey("raw", utf8(password), "PBKDF2", false, ["deriveBits"])
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt, iterations: 310_000 },
-    km,
-    256,
-  )
-  const rawKey = new Uint8Array(bits)
+  let rawKey: Uint8Array;
+
+  if (typeof window === "undefined") {
+    // Server-side fallback (if ever needed in node)
+    throw new Error("Argon2id derivation is only supported in the browser via Web Worker");
+  } else {
+    // Client-side Web Worker using Argon2id WebAssembly
+    const { runInWorker } = await import("../erasure");
+    rawKey = await runInWorker<Uint8Array>("DERIVE_MASTER_KEY_ARGON2", {
+      password: utf8(password),
+      salt
+    });
+  }
   
   // Calculate fingerprint before locking the key
   const h = await crypto.subtle.digest("SHA-256", rawKey)

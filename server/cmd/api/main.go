@@ -59,6 +59,7 @@ func main() {
 	
 	// Providers
 	api.Get("/providers", handlers.ListProviders)
+	api.Get("/providers/latency", handlers.ProviderLatency)
 	api.Post("/providers/aws", handlers.LinkAWS)
 	api.Delete("/providers/:id", handlers.UnlinkProvider)
 	api.Post("/providers/oauth/session", handlers.CreateOAuthSession)

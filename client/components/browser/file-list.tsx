@@ -158,12 +158,19 @@ export function FileList({
           streamingMetaCache.set(inode.id, { inode: data.inode, chunks: data.chunks })
           
           const targetShards = data.chunks.filter((c: any) => c.chunk_index === 0)
-          for (const shard of targetShards) {
+          const dataShardsToPrefetch = [...targetShards].sort((a, b) => a.shard_index - b.shard_index).slice(0, 10)
+
+          for (const shard of dataShardsToPrefetch) {
             if (!prefetchShardCache.has(shard.id)) {
               const fetchPromise = fetch(`/api/shards/${shard.id}`)
-                .then(res => res.arrayBuffer())
+                .then(res => {
+                  if (!res.ok) throw new Error(`Prefetch failed with ${res.status}`)
+                  return res.arrayBuffer()
+                })
                 .then(ab => new Uint8Array(ab))
-                .catch(() => new Uint8Array())
+                // Do not catch and return an empty Uint8Array here!
+                // Let it reject so streaming-engine's fetchMinimumShards knows to fallback to parity shards.
+              
               prefetchShardCache.set(shard.id, fetchPromise)
             }
           }

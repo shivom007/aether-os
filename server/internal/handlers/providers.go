@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -323,4 +324,57 @@ func DropboxCallback(c *fiber.Ctx) error {
 
 	frontendURL := getFrontendURL()
 	return c.Redirect(frontendURL + "/dashboard/providers")
+}
+
+// ProviderLatency returns the measured network latency from the Go backend to each linked provider.
+func ProviderLatency(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var userProviders []models.UserProvider
+	db.DB.Where("user_id = ?", userID).Find(&userProviders)
+
+	if len(userProviders) == 0 {
+		return c.JSON(fiber.Map{})
+	}
+
+	latencies := make(map[uint]int64)
+
+	for _, p := range userProviders {
+		var url string
+		var method string = "GET"
+
+		if p.Provider == "GoogleDrive" {
+			url = "https://www.googleapis.com/drive/v3/about"
+		} else if p.Provider == "Dropbox" {
+			url = "https://api.dropboxapi.com/2/users/get_current_account"
+			method = "POST"
+		} else {
+			// Skip unsupported or fast providers like local/AWS if we don't have a direct ping
+			continue
+		}
+
+		// Perform a lightweight request (even if unauthorized, it measures TTFB)
+		req, err := http.NewRequest(method, url, nil)
+		if err != nil {
+			continue
+		}
+		
+		// Set a dummy authorization so the API gateway parses it rather than immediate edge block
+		req.Header.Set("Authorization", "Bearer invalid_token")
+
+		start := time.Now()
+		resp, err := http.DefaultClient.Do(req)
+		elapsed := time.Since(start).Milliseconds()
+
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+
+		latencies[p.ID] = elapsed
+	}
+
+	return c.JSON(latencies)
 }

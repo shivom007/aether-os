@@ -91,3 +91,33 @@ pub fn reconstruct_shards(
     recovered.truncate(original_size);
     recovered
 }
+
+/// Derives a 32-byte master key from a password and salt using Argon2id.
+/// `password`: UTF-8 bytes of the user's password.
+/// `salt`: 16 bytes of random salt.
+#[wasm_bindgen]
+pub fn derive_master_key_argon2(password: &[u8], salt: &[u8]) -> Vec<u8> {
+    use argon2::{
+        Argon2, Params,
+    };
+    
+    // We don't actually need PasswordHasher/SaltString if we just use Argon2 directly
+    // Let's use the low-level hash_password_into to get the raw bytes
+    let mut out = [0u8; 32];
+    let params = Params::new(
+        65536, // m_cost (memory cost): 64 MB
+        3,     // t_cost (time cost): 3 iterations
+        4,     // p_cost (parallelism): 4 lanes (WebAssembly is single-threaded mostly but this is fine)
+        Some(32), // output length
+    ).expect("Invalid Argon2 parameters");
+    
+    let argon2 = Argon2::new(
+        argon2::Algorithm::Argon2id,
+        argon2::Version::V0x13,
+        params,
+    );
+    
+    argon2.hash_password_into(password, salt, &mut out).expect("Argon2 derivation failed");
+    out.to_vec()
+}
+

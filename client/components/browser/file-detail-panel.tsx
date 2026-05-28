@@ -54,6 +54,7 @@ export function FileDetailPanel({
 
   const chunks = data?.chunks ?? []
   const mime = inferMime(inode.name)
+  const isVideo = mime.startsWith("video/")
 
   const handleDownload = async () => {
     if (!kdfSalt) {
@@ -87,6 +88,10 @@ export function FileDetailPanel({
         <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close detail panel">
           <X className="size-4" />
         </Button>
+      </div>
+
+      <div className="my-4 flex items-center justify-center p-8 bg-muted rounded-lg">
+        <FileIcon className="size-16 text-muted-foreground" />
       </div>
 
       <Separator className="my-3" />

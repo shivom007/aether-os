@@ -4,26 +4,49 @@ export const DATA_SHARDS = 10
 export const PARITY_SHARDS = 4
 export const TOTAL_SHARDS = DATA_SHARDS + PARITY_SHARDS
 
-let wasmInitialized = false
+let erasureWorker: Worker | null = null;
+let messageIdCounter = 0;
+const pendingResolvers = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
 
 /**
- * Initializes the WebAssembly Reed-Solomon Erasure Coding module.
+ * Initializes the Web Worker for erasure coding and cryptography.
  */
-export async function initErasureWasm() {
-  if (!wasmInitialized) {
-    if (typeof window === "undefined") {
-      // Server-side
-      const fs = await import("fs")
-      const path = await import("path")
-      const wasmPath = path.join(process.cwd(), "wasm-erasure", "pkg", "wasm_erasure_bg.wasm")
-      const wasmBuffer = fs.readFileSync(wasmPath)
-      await initWasm({ module_or_path: wasmBuffer })
+export async function initErasureWorker() {
+  if (!erasureWorker) {
+    if (typeof window !== "undefined") {
+      // Client-side Web Worker
+      erasureWorker = new Worker(new URL('./crypto-worker.ts', import.meta.url), { type: 'module' });
+      erasureWorker.onmessage = (e) => {
+        const { id, success, data, error } = e.data;
+        const resolvers = pendingResolvers.get(id);
+        if (resolvers) {
+          pendingResolvers.delete(id);
+          if (success) resolvers.resolve(data);
+          else resolvers.reject(new Error(error));
+        }
+      };
     } else {
-      // Client-side
-      await initWasm({ module_or_path: "/wasm_erasure_bg.wasm" })
+      // Server-side / Node fallback (for tests or server rendering)
+      await initErasureWasm();
     }
-    wasmInitialized = true
   }
+}
+
+/**
+ * Send a message to the Web Worker and wait for the response.
+ */
+export async function runInWorker<T>(type: string, payload: any, transferables: Transferable[] = []): Promise<T> {
+  await initErasureWorker();
+  
+  if (!erasureWorker) {
+    throw new Error("Web Worker not available");
+  }
+
+  return new Promise((resolve, reject) => {
+    const id = ++messageIdCounter;
+    pendingResolvers.set(id, { resolve, reject });
+    erasureWorker!.postMessage({ type, payload, id }, { transfer: transferables });
+  });
 }
 
 export interface EncodedShards {
@@ -33,39 +56,36 @@ export interface EncodedShards {
 }
 
 /**
- * Encodes a buffer into 10 data shards and 4 parity shards using high-performance WebAssembly.
+ * Encodes a buffer into 10 data shards and 4 parity shards using high-performance WebAssembly inside a Web Worker.
  */
 export async function encodeShards(input: Uint8Array): Promise<EncodedShards> {
-  await initErasureWasm()
-  
-  // Calculate padded size
-  let shardSize = Math.ceil(input.length / DATA_SHARDS)
-  
-  // Call Rust WebAssembly
-  // The WASM function returns a single flat Uint8Array containing all 14 shards sequentially
-  const flatEncodedArray = encode_shards(input)
-  
-  const shards: Uint8Array[] = []
-  for (let i = 0; i < TOTAL_SHARDS; i++) {
-    // We slice instead of subarray so it creates a distinct typed array, though it uses same buffer
-    shards.push(flatEncodedArray.slice(i * shardSize, (i + 1) * shardSize))
+  if (typeof window === "undefined") {
+    // Server-side fallback (synchronous WASM)
+    await initErasureWasm()
+    let shardSize = Math.ceil(input.length / DATA_SHARDS)
+    const flatEncodedArray = encode_shards(input)
+    const shards: Uint8Array[] = []
+    for (let i = 0; i < TOTAL_SHARDS; i++) {
+      shards.push(flatEncodedArray.slice(i * shardSize, (i + 1) * shardSize))
+    }
+    return { shardSize, originalSize: input.length, shards }
   }
 
-  return { shardSize, originalSize: input.length, shards }
+  // Client-side Web Worker
+  // Copy input so we don't accidentally transfer something the UI still needs,
+  // or we could transfer it directly if we accept mutating the caller's reference.
+  // For safety, we'll copy it before transfer.
+  const payloadBuffer = new Uint8Array(input).buffer;
+  return await runInWorker<EncodedShards>("ENCODE_SHARDS", payloadBuffer, [payloadBuffer]);
 }
 
 /**
- * Reconstructs the original data buffer from any 10 available shards using WebAssembly.
- * Missing shards should be represented as `null` in the array.
- * @param availableShards An array of length 14 containing Uint8Array or null.
- * @param originalSize The original byte length of the file/chunk.
+ * Reconstructs the original data buffer from any 10 available shards using WebAssembly inside a Web Worker.
  */
 export async function reconstructShards(
   availableShards: (Uint8Array | null)[],
   originalSize: number
 ): Promise<Uint8Array> {
-  await initErasureWasm()
-
   if (availableShards.length !== TOTAL_SHARDS) {
     throw new Error(`Expected array of length ${TOTAL_SHARDS}`)
   }
@@ -84,10 +104,7 @@ export async function reconstructShards(
     throw new Error(`Need at least ${DATA_SHARDS} shards to reconstruct, got ${presentIndices.length}`)
   }
 
-  // We only need exactly DATA_SHARDS shards to mathematically rebuild
   const useIndices = presentIndices.slice(0, DATA_SHARDS)
-
-  // Flatten the 10 chosen shards into a single byte array for WASM crossing
   const flatPresentShards = new Uint8Array(DATA_SHARDS * shardSize)
   const indicesArray = new Uint8Array(DATA_SHARDS)
   
@@ -97,16 +114,23 @@ export async function reconstructShards(
     indicesArray[i] = idx
   }
 
-  // Call Rust WebAssembly to magically reconstruct the data
-  const recoveredData = reconstruct_shards(flatPresentShards, indicesArray, originalSize)
+  if (typeof window === "undefined") {
+    // Server-side fallback
+    await initErasureWasm();
+    return reconstruct_shards(flatPresentShards, indicesArray, originalSize);
+  }
 
-  return recoveredData
+  // Client-side Web Worker
+  return await runInWorker<Uint8Array>("RECONSTRUCT_SHARDS", {
+    availableShards: { flatPresentShards, indicesArray },
+    originalSize
+  }, [flatPresentShards.buffer, indicesArray.buffer]);
 }
 
 /**
  * Intelligently fetches exactly DATA_SHARDS (10) shards required for reconstruction.
- * It initiates 10 fetches concurrently. If any fail or timeout, it dynamically requests
- * the next available parity shards to compensate. Aborts remaining fetches once 10 succeed.
+ * Implements Self-Tuning Dynamic Hedging: it tracks the download time of the *fastest* shard,
+ * and if the remaining primary shards do not finish within a margin, it races the parity shards.
  */
 export async function fetchMinimumShards(
   availableShards: { id: string; shard_index: number }[],
@@ -127,12 +151,18 @@ export async function fetchMinimumShards(
     let failCount = 0
     let nextToFetch = 0
     const abortController = new AbortController()
+    
+    let fastestShardTimeMs: number | null = null
+    const startTime = Date.now()
+    let hedgeTimerId: ReturnType<typeof setTimeout> | null = null
 
     const checkCompletion = () => {
       if (successCount >= DATA_SHARDS) {
+        if (hedgeTimerId) clearTimeout(hedgeTimerId)
         abortController.abort() // Cancel any pending/in-flight redundant fetches
         resolve(fetched)
       } else if (failCount > (sortedShards.length - DATA_SHARDS)) {
+        if (hedgeTimerId) clearTimeout(hedgeTimerId)
         abortController.abort()
         reject(new Error(`Failed to fetch enough shards. ${failCount} failed.`))
       }
@@ -146,8 +176,27 @@ export async function fetchMinimumShards(
       try {
         const data = await fetcher(shard.id, abortController.signal)
         if (abortController.signal.aborted) return
+        
         fetched[shard.shard_index] = data
         successCount++
+        
+        // DYNAMIC HEDGING LOGIC
+        if (fastestShardTimeMs === null) {
+          fastestShardTimeMs = Date.now() - startTime
+          // We set a dynamic margin (e.g., 50% extra time, with a minimum of 200ms)
+          const margin = Math.max(fastestShardTimeMs * 0.5, 200)
+          
+          hedgeTimerId = setTimeout(() => {
+            // Hedge window expired! Fire all remaining parity shards to race the stragglers
+            if (successCount < DATA_SHARDS && !abortController.signal.aborted) {
+              console.log(`[Hedging] Fastest shard took ${fastestShardTimeMs}ms. Hedging at ${fastestShardTimeMs + margin}ms by firing parity shards.`)
+              while (nextToFetch < sortedShards.length) {
+                startNextFetch()
+              }
+            }
+          }, margin)
+        }
+
         if (onProgress) onProgress()
         checkCompletion()
       } catch (err) {
