@@ -27,7 +27,7 @@ export async function initErasureWorker() {
       };
     } else {
       // Server-side / Node fallback (for tests or server rendering)
-      await initErasureWasm();
+      await initWasm();
     }
   }
 }
@@ -61,7 +61,7 @@ export interface EncodedShards {
 export async function encodeShards(input: Uint8Array): Promise<EncodedShards> {
   if (typeof window === "undefined") {
     // Server-side fallback (synchronous WASM)
-    await initErasureWasm()
+    await initWasm()
     let shardSize = Math.ceil(input.length / DATA_SHARDS)
     const flatEncodedArray = encode_shards(input)
     const shards: Uint8Array[] = []
@@ -116,7 +116,7 @@ export async function reconstructShards(
 
   if (typeof window === "undefined") {
     // Server-side fallback
-    await initErasureWasm();
+    await initWasm();
     return reconstruct_shards(flatPresentShards, indicesArray, originalSize);
   }
 
@@ -189,7 +189,7 @@ export async function fetchMinimumShards(
           hedgeTimerId = setTimeout(() => {
             // Hedge window expired! Fire all remaining parity shards to race the stragglers
             if (successCount < DATA_SHARDS && !abortController.signal.aborted) {
-              console.log(`[Hedging] Fastest shard took ${fastestShardTimeMs}ms. Hedging at ${fastestShardTimeMs + margin}ms by firing parity shards.`)
+              console.log(`[Hedging] Fastest shard took ${fastestShardTimeMs!}ms. Hedging at ${fastestShardTimeMs! + margin}ms by firing parity shards.`)
               while (nextToFetch < sortedShards.length) {
                 startNextFetch()
               }
