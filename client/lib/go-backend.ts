@@ -3,7 +3,7 @@
  * The Go backend runs on localhost:8080 and uses Bearer JWT auth.
  */
 
-const GO_API_BASE = process.env.GO_API_URL || process.env.NEXT_PUBLIC_GO_API_URL || "https://aether-backend-production-18e4.up.railway.app/api/v1"
+const GO_API_BASE = process.env.GO_API_URL || "http://localhost:8080/api/v1"
 
 export interface GoBackendOptions extends RequestInit {
   token?: string | null
