@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
 import { QueryProvider } from "@/components/providers/query-provider"
 import { PassphrasePromptProvider } from "@/components/providers/passphrase-prompt-provider"
@@ -32,7 +31,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </PassphrasePromptProvider>
         </QueryProvider>
         <Toaster richColors position="top-right" closeButton />
-        {process.env.NODE_ENV === "production" && <Analytics />}
       </body>
     </html>
   )

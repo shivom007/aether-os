@@ -60,6 +60,6 @@ export async function POST(req: NextRequest) {
     if (msg.includes("Invalid credentials") || msg.includes("401")) {
       return fail("Invalid credentials", 401)
     }
-    return fail(msg || "Login failed", 500)
+    return fail(`CF Edge Error: ${msg}`, 500)
   }
 }

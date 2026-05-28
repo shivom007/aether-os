@@ -65,6 +65,6 @@ export async function POST(req: NextRequest) {
     if (msg.includes("already exists") || msg.includes("duplicate") || msg.includes("409")) {
       return fail("Email already registered", 409)
     }
-    return fail(msg || "Signup failed", 500)
+    return fail(`CF Edge Error: ${msg}`, 500)
   }
 }
