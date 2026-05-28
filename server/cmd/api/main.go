@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"aether-server/internal/db"
 	"aether-server/internal/handlers"
-	"aether-server/internal/storage"
+	"aether-server/internal/filestore"
 	"github.com/joho/godotenv"
 )
 
@@ -20,7 +20,7 @@ func main() {
 	db.InitDB()
 
 	// Initialize S3 Storage for Thumbnails
-	storage.InitS3()
+	filestore.InitS3()
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{

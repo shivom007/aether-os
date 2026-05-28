@@ -9,7 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"aether-server/internal/db"
 	"aether-server/internal/models"
-	"aether-server/internal/storage"
+	"aether-server/internal/filestore"
 )
 
 type CreateFolderRequest struct {
@@ -117,8 +117,8 @@ func ListFiles(c *fiber.Ctx) error {
 	fileQuery.Find(&files)
 
 	for i := range files {
-		if strings.HasPrefix(files[i].Thumbnail, "thumbnails/") && storage.PresignClient != nil {
-			url, err := storage.GeneratePresignedURL(c.Context(), files[i].Thumbnail)
+		if strings.HasPrefix(files[i].Thumbnail, "thumbnails/") && filestore.PresignClient != nil {
+			url, err := filestore.GeneratePresignedURL(c.Context(), files[i].Thumbnail)
 			if err == nil {
 				files[i].Thumbnail = url
 			}
@@ -162,9 +162,9 @@ func RegisterFile(c *fiber.Ctx) error {
 		// We just store the raw string bytes in S3!
 		thumbnailBytes := []byte(req.Thumbnail)
 
-		if storage.S3Client != nil {
+		if filestore.S3Client != nil {
 			key := fmt.Sprintf("thumbnails/%d/%d.enc", userID, file.ID)
-			err := storage.UploadThumbnail(c.Context(), key, thumbnailBytes)
+			err := filestore.UploadThumbnail(c.Context(), key, thumbnailBytes)
 			if err == nil {
 				file.Thumbnail = key
 				db.DB.Save(&file)
@@ -209,8 +209,8 @@ func GetFileDetails(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "File not found"})
 	}
 
-	if strings.HasPrefix(file.Thumbnail, "thumbnails/") && storage.PresignClient != nil {
-		url, err := storage.GeneratePresignedURL(c.Context(), file.Thumbnail)
+	if strings.HasPrefix(file.Thumbnail, "thumbnails/") && filestore.PresignClient != nil {
+		url, err := filestore.GeneratePresignedURL(c.Context(), file.Thumbnail)
 		if err == nil {
 			file.Thumbnail = url
 		}
@@ -263,7 +263,7 @@ func DeleteFile(c *fiber.Ctx) error {
 		
 		// Delete S3 thumbnail if it exists
 		if strings.HasPrefix(file.Thumbnail, "thumbnails/") {
-			storage.DeleteThumbnail(context.Background(), file.Thumbnail)
+			filestore.DeleteThumbnail(context.Background(), file.Thumbnail)
 		}
 	}(file)
 
