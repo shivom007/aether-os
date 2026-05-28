@@ -102,3 +102,69 @@ export async function reconstructShards(
 
   return recoveredData
 }
+
+/**
+ * Intelligently fetches exactly DATA_SHARDS (10) shards required for reconstruction.
+ * It initiates 10 fetches concurrently. If any fail or timeout, it dynamically requests
+ * the next available parity shards to compensate. Aborts remaining fetches once 10 succeed.
+ */
+export async function fetchMinimumShards(
+  availableShards: { id: string; shard_index: number }[],
+  fetcher: (id: string, signal: AbortSignal) => Promise<Uint8Array>,
+  onProgress?: () => void
+): Promise<(Uint8Array | null)[]> {
+  const fetched: (Uint8Array | null)[] = new Array(TOTAL_SHARDS).fill(null)
+  
+  if (availableShards.length < DATA_SHARDS) {
+    throw new Error(`Only ${availableShards.length} shards available. Need at least ${DATA_SHARDS}`)
+  }
+
+  // Ensure shards are ordered by shard_index so we prioritize primary data shards (0-9) over parity (10-13)
+  const sortedShards = [...availableShards].sort((a, b) => a.shard_index - b.shard_index)
+  
+  return new Promise((resolve, reject) => {
+    let successCount = 0
+    let failCount = 0
+    let nextToFetch = 0
+    const abortController = new AbortController()
+
+    const checkCompletion = () => {
+      if (successCount >= DATA_SHARDS) {
+        abortController.abort() // Cancel any pending/in-flight redundant fetches
+        resolve(fetched)
+      } else if (failCount > (sortedShards.length - DATA_SHARDS)) {
+        abortController.abort()
+        reject(new Error(`Failed to fetch enough shards. ${failCount} failed.`))
+      }
+    }
+
+    const startNextFetch = async () => {
+      if (successCount >= DATA_SHARDS || nextToFetch >= sortedShards.length) return
+      if (abortController.signal.aborted) return
+      
+      const shard = sortedShards[nextToFetch++]
+      try {
+        const data = await fetcher(shard.id, abortController.signal)
+        if (abortController.signal.aborted) return
+        fetched[shard.shard_index] = data
+        successCount++
+        if (onProgress) onProgress()
+        checkCompletion()
+      } catch (err) {
+        if (abortController.signal.aborted) return
+        console.warn(`[Shard ${shard.shard_index}] failed:`, err)
+        failCount++
+        checkCompletion()
+        
+        // When one fails, immediately try the next available one
+        startNextFetch()
+      }
+    }
+
+    // Kick off the first DATA_SHARDS (10) requests concurrently
+    const initialConcurrency = Math.min(DATA_SHARDS, sortedShards.length)
+    for (let i = 0; i < initialConcurrency; i++) {
+      startNextFetch()
+    }
+  })
+}

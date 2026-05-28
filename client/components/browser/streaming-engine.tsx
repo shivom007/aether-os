@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react"
 import { api } from "@/lib/api"
 import { derive_chunk_key, decrypt_chunk } from "@/lib/crypto/core"
-import { reconstructShards, DATA_SHARDS, TOTAL_SHARDS } from "@/lib/erasure"
+import { reconstructShards, DATA_SHARDS, TOTAL_SHARDS, fetchMinimumShards } from "@/lib/erasure"
 import type { Inode, PhysicalChunk } from "@/lib/types"
 
 interface StreamingEngineProps {
@@ -44,31 +44,16 @@ export function StreamingEngine({ volumeId, masterKey }: StreamingEngineProps) {
         const targetShards = chunks.filter(c => c.chunk_index === chunkIndex)
         if (targetShards.length === 0) throw new Error(`Chunk ${chunkIndex} missing from DB`)
 
-        // 4. Download shards concurrently
-        const fetchedShards: (Uint8Array | null)[] = new Array(TOTAL_SHARDS).fill(null)
-        const shardPromises = targetShards.map(async (shard) => {
-          if (prefetchShardCache.has(shard.id)) {
-            const buffer = await prefetchShardCache.get(shard.id)!
-            return { index: shard.shard_index, data: buffer }
+        // 4. Fetch exactly 10 shards intelligently
+        const fetchedShards = await fetchMinimumShards(targetShards, async (shardId, signal) => {
+          if (prefetchShardCache.has(shardId)) {
+            return await prefetchShardCache.get(shardId)!
           }
-          const res = await fetch(`/api/shards/${shard.id}`)
-          if (!res.ok) throw new Error(`Failed to fetch shard ${shard.shard_index}`)
+          const res = await fetch(`/api/shards/${shardId}`, { signal })
+          if (!res.ok) throw new Error(`Failed to fetch shard ${shardId}`)
           const buffer = await res.arrayBuffer()
-          return { index: shard.shard_index, data: new Uint8Array(buffer) }
+          return new Uint8Array(buffer)
         })
-
-        const results = await Promise.allSettled(shardPromises)
-        let successCount = 0
-        for (const res of results) {
-          if (res.status === "fulfilled") {
-            fetchedShards[res.value.index] = res.value.data
-            successCount++
-          }
-        }
-
-        if (successCount < DATA_SHARDS) {
-          throw new Error(`Insufficient shards to stream chunk ${chunkIndex}`)
-        }
 
         // 5. Reconstruct
         const CHUNK_SIZE = 5 * 1024 * 1024

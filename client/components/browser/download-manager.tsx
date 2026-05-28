@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { useDownloadStore } from "@/stores/download-store"
 import { api } from "@/lib/api"
 import { derive_chunk_key, decrypt_chunk } from "@/lib/crypto/core"
-import { reconstructShards, DATA_SHARDS, TOTAL_SHARDS } from "@/lib/erasure"
+import { reconstructShards, DATA_SHARDS, TOTAL_SHARDS, fetchMinimumShards } from "@/lib/erasure"
 import type { Inode, PhysicalChunk } from "@/lib/types"
 
 export function DownloadManager() {
@@ -48,48 +48,27 @@ export function DownloadManager() {
         const totalChunks = chunksMap.size
         const chunkData: Uint8Array[] = []
 
-        let globalTotalShards = 0
-        for (const [_, chunkShards] of chunksMap) {
-          globalTotalShards += chunkShards.filter(s => s.remote_object_id).length
-        }
+        const globalTotalShards = totalChunks * DATA_SHARDS
         let globalDownloadedShards = 0
 
         for (let i = 0; i < totalChunks; i++) {
           const chunkShards = chunksMap.get(i)
           if (!chunkShards) throw new Error(`Chunk ${i} is entirely missing from the database.`)
-          
-          const availableDbShards = chunkShards.sort((a, b) => a.shard_index - b.shard_index)
 
-          const shardPromises = availableDbShards.map(async (shard) => {
-            const res = await fetch(`/api/shards/${shard.id}`)
-            if (!res.ok) throw new Error("Shard fetch failed")
-            const buffer = await res.arrayBuffer()
-            const data = new Uint8Array(buffer)
-            
-            globalDownloadedShards++
-            updateTask(nextTask.id, { progress: (globalDownloadedShards / globalTotalShards) * 100 })
-            
-            return { index: shard.shard_index, data }
-          })
-
-          const results = await Promise.allSettled(shardPromises)
-
-          const fetchedShards: (Uint8Array | null)[] = new Array(TOTAL_SHARDS).fill(null)
-          
-          let successCount = 0
-          let sampleSize = 0
-
-          for (const res of results) {
-            if (res.status === "fulfilled") {
-              fetchedShards[res.value.index] = res.value.data
-              successCount++
-              sampleSize = res.value.data.byteLength
+          const fetchedShards = await fetchMinimumShards(
+            chunkShards,
+            async (shardId, signal) => {
+              const res = await fetch(`/api/shards/${shardId}`, { signal })
+              if (!res.ok) throw new Error("Shard fetch failed")
+              const buffer = await res.arrayBuffer()
+              return new Uint8Array(buffer)
+            },
+            () => {
+              // onProgress callback
+              globalDownloadedShards++
+              updateTask(nextTask.id, { progress: Math.min(100, (globalDownloadedShards / globalTotalShards) * 100) })
             }
-          }
-
-          if (successCount < DATA_SHARDS) {
-            throw new Error(`Chunk ${i} only has ${successCount} shards remaining. Needs at least ${DATA_SHARDS} to rebuild.`)
-          }
+          )
           
           const isLastChunk = i === totalChunks - 1
           const isVideo = nextTask.inode.mime_type?.startsWith("video/")
