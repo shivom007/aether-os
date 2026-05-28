@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/gofiber/fiber/v2"
 	"aether-server/internal/db"
