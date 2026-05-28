@@ -15,6 +15,7 @@ const PUBLIC_PATHS = [
   "/apple-icon",
   "/privacy",
   "/terms",
+  "/_vercel"
 ]
 
 function isPublic(pathname: string) {
