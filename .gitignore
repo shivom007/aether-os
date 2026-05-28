@@ -39,6 +39,9 @@ temp_railway/
 dashboard.zip
 simulate_upload.bin
 .wrangler/
+client/.open-next/
+client/.pnpm-store/
+client-old/
 
 # Storage shards (never push user data)
 server/storage/
@@ -46,10 +49,9 @@ server/storage/
 # Build caches
 client/tsconfig.tsbuildinfo
 
-# Test scripts
-test_body.json
-test_crypto.js
-test_crypto.ts
-test_e2e.js
-test_fetch.ts
-test_shards.ts
+# Scripts and Databases
+aether.db
+aether.db-journal
+*.ps1
+test*.js
+test*.ts
