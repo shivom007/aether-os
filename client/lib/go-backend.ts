@@ -56,3 +56,19 @@ export async function goFetchBinary(path: string, token?: string | null): Promis
   }
   return res.arrayBuffer()
 }
+
+/**
+ * Fetch binary data as a readable stream from Go backend
+ */
+export async function goFetchStream(path: string, token?: string | null): Promise<ReadableStream<Uint8Array> | null> {
+  const url = `${GO_API_BASE}${path}`
+  const headers: Record<string, string> = {}
+  if (token) headers["Authorization"] = `Bearer ${token}`
+
+  const res = await fetch(url, { headers })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw Object.assign(new Error(text), { status: res.status })
+  }
+  return res.body
+}

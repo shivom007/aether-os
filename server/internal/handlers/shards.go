@@ -148,12 +148,6 @@ func DownloadShardHandler(c *fiber.Ctx) error {
 	}
 	defer reader.Close()
 
-	// Read entire shard into memory to guarantee Content-Length and avoid streaming issues
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Failed to read shard data"})
-	}
-
 	c.Set("Content-Type", "application/octet-stream")
-	return c.Send(data)
+	return c.SendStream(reader)
 }
