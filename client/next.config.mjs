@@ -64,3 +64,8 @@ const nextConfig = {
 
 export default nextConfig
 
+if (!process.env.VERCEL) {
+  import('@opennextjs/cloudflare').then(m => m.initOpenNextCloudflareForDev());
+}
+
+
