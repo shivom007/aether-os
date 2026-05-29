@@ -79,8 +79,8 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, onUploadComplete }: Upload
 
         const encoded = await encodeShards(body)
 
-        // BATCH ALLOCATION
-        const { allocation } = await api<{ jobId: string; status: string; allocation: any }>(`/api/jobs/chunk/batch`, {
+        // SHARD ALLOCATION
+        const { allocation } = await api<{ jobId: string; status: string; allocation: any }>(`/api/jobs/chunk`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
