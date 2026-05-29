@@ -3,6 +3,8 @@ package handlers
 import (
 	"fmt"
 	"mime/multipart"
+	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"aether-server/internal/db"
@@ -184,11 +186,35 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 				return
 			}
 
-			providerFileID, err := provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
-			if err != nil {
+			var providerFileID string
+			var uploadErr error
+			maxRetries := 3
+
+			for attempt := 1; attempt <= maxRetries; attempt++ {
+				// Seek to beginning before every attempt (vital for retries on a stream)
+				fileData.Seek(0, 0)
+				
+				providerFileID, uploadErr = provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+				if uploadErr == nil {
+					break // Success
+				}
+				
+				// Check if it's a Dropbox rate limit error
+				if strings.Contains(uploadErr.Error(), "too_many_write_operations") {
+					if attempt < maxRetries {
+						fmt.Printf("Rate limit hit on shard %d (attempt %d). Retrying in 1.5s...\n", index, attempt)
+						time.Sleep(1500 * time.Millisecond)
+						continue
+					}
+				}
+				// Other error or exhausted retries
+				break
+			}
+
+			if uploadErr != nil {
 				shard.Status = "missing"
 				db.DB.Save(&shard)
-				results <- UploadResult{Index: index, Error: err}
+				results <- UploadResult{Index: index, Error: uploadErr}
 				return
 			}
 

@@ -149,6 +149,7 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, onUploadComplete }: Upload
       // Call complete callback via window to avoid closure stale state
       window.dispatchEvent(new CustomEvent('aether-upload-complete', { detail: { volumeId: vId } }))
       toast.success(`${file.name} encrypted and uploaded`)
+      if (inodeId) onUploadComplete?.(inodeId)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Upload failed"
       

@@ -101,7 +101,7 @@ export function VolumeDrawerTesting({
                 </div>
                 <Separator className="my-3" />
                 <Button asChild variant="outline" className="w-full bg-transparent">
-                  <Link href={`/dashboard/volumes/${volume.id}/browse`}>
+                  <Link href={`/dashboard/volumes-testing/${volume.id}/browse`}>
                     <FolderOpen className="mr-2 h-4 w-4" aria-hidden="true" />
                     Open file browser
                   </Link>

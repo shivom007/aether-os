@@ -24,7 +24,9 @@ export function VolumesTable({
   volumes: Volume[]
   isLoading: boolean
   onSelect: (v: Volume) => void
+  baseHref?: string
 }) {
+  const { baseHref = "/dashboard/volumes" } = arguments[0]
   const [query, setQuery] = useState("")
   const [sortKey, setSortKey] = useState<SortKey>("created_at")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc")
@@ -150,7 +152,7 @@ export function VolumesTable({
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       <Button asChild variant="ghost" size="sm">
-                        <Link href={`/dashboard/volumes/${v.id}/browse`}>
+                        <Link href={`${baseHref}/${v.id}/browse`}>
                           <FolderOpen className="h-4 w-4" aria-hidden="true" />
                           <span className="sr-only">Browse {v.name}</span>
                         </Link>

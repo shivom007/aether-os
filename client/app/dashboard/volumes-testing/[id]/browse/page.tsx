@@ -7,7 +7,7 @@ import type { Inode, Volume } from "@/lib/types"
 import { FileTree } from "@/components/browser/file-tree"
 import { FileList } from "@/components/browser/file-list"
 import { FileDetailPanel } from "@/components/browser/file-detail-panel"
-import { UploadZone } from "@/components/upload/upload-zone"
+import { UploadZoneGlobal } from "@/components/upload/upload-zone-global"
 
 export default function BrowsePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: volumeId } = use(params)
@@ -23,9 +23,9 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="flex flex-col gap-4 min-w-0">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{volume?.name ?? "Browse"}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{volume?.name ?? "Browse"} (Testing)</h1>
         <p className="text-sm text-muted-foreground">
-          Files are end-to-end encrypted. Downloads reconstruct from erasure-coded shards.
+          Files are end-to-end encrypted. Testing Sandbox.
         </p>
       </header>
 
@@ -38,7 +38,7 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
           />
           <div className="mt-4 rounded-lg border bg-card p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Upload to this volume</p>
-            <UploadZone 
+            <UploadZoneGlobal 
               volumeId={volumeId} 
               kdfSalt={volume?.kdf_salt ?? null} 
               onUploadComplete={() => {

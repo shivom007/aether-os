@@ -23,7 +23,7 @@ export function UploadManagerGlobal() {
   }
 
   return (
-    <div className="fixed bottom-4 right-[22rem] z-50 w-80 rounded-lg border bg-card shadow-lg flex flex-col overflow-hidden max-h-96">
+    <div className="w-80 rounded-lg border bg-card shadow-lg flex flex-col overflow-hidden max-h-96">
       <div className="flex items-center justify-between bg-muted/50 px-3 py-2 border-b">
         <span className="text-sm font-medium flex items-center gap-2">
           <UploadIcon className="h-4 w-4" />

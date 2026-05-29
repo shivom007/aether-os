@@ -18,8 +18,9 @@ export function Breadcrumbs() {
   const search = useSearchParams()
   const segments = pathname.split("/").filter(Boolean)
 
-  // Look up volume name if we're inside /volumes/[id]/...
-  const volumeIdx = segments.indexOf("volumes")
+  // Look up volume name if we're inside /volumes/[id]/... or /volumes-testing/[id]/...
+  const isTesting = segments.includes("volumes-testing")
+  const volumeIdx = isTesting ? segments.indexOf("volumes-testing") : segments.indexOf("volumes")
   const volumeId = volumeIdx >= 0 && segments.length > volumeIdx + 1 ? segments[volumeIdx + 1] : undefined
   const volumeQ = useQuery({
     queryKey: ["volume", volumeId],
@@ -32,12 +33,13 @@ export function Breadcrumbs() {
 
   if (segments.length === 0) {
     crumbs.push({ label: "Dashboard" })
-  } else if (segments.includes("volumes")) {
-    crumbs.push({ label: "Volumes", href: "/dashboard/volumes" })
+  } else if (segments.includes("volumes") || segments.includes("volumes-testing")) {
+    const basePath = isTesting ? "/dashboard/volumes-testing" : "/dashboard/volumes"
+    crumbs.push({ label: isTesting ? "Volumes (Testing)" : "Volumes", href: basePath })
     if (volumeId) {
       crumbs.push({
         label: volumeQ.data?.name || volumeId.slice(0, 8),
-        href: `/dashboard/volumes/${volumeId}/browse`,
+        href: `${basePath}/${volumeId}/browse`,
         mono: !volumeQ.data,
       })
       if (segments.includes("browse")) {
@@ -49,7 +51,7 @@ export function Breadcrumbs() {
             acc += "/" + p
             crumbs.push({
               label: p,
-              href: i === parts.length - 1 ? undefined : `/dashboard/volumes/${volumeId}/browse?path=${encodeURIComponent(acc)}`,
+              href: i === parts.length - 1 ? undefined : `${basePath}/${volumeId}/browse?path=${encodeURIComponent(acc)}`,
             })
           })
         }
