@@ -7,6 +7,7 @@ import type { Volume } from "@/lib/types"
 import { VolumesTable } from "@/components/volumes/volumes-table"
 import { CreateVolumeDialog } from "@/components/volumes/create-volume-dialog"
 import { VolumeDrawerTesting } from "@/components/volumes/volume-drawer-testing"
+import { UploadManagerGlobal } from "@/components/upload/upload-manager-global"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
@@ -45,6 +46,9 @@ export default function VolumesPage() {
         volumeId={selectedId}
         onClose={() => setSelectedId(null)}
       />
+      
+      {/* Render the global upload manager only in this testing tab */}
+      <UploadManagerGlobal />
     </div>
   )
 }
