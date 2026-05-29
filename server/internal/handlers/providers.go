@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -165,6 +166,27 @@ func UnlinkProvider(c *fiber.Ctx) error {
 
 // OAuth Handlers
 
+type OAuthState struct {
+	SessionID string `json:"sessionId"`
+	ReturnTo  string `json:"returnTo"`
+}
+
+func encodeState(sessionID, returnTo string) string {
+	state := OAuthState{SessionID: sessionID, ReturnTo: returnTo}
+	b, _ := json.Marshal(state)
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+func decodeState(encoded string) (OAuthState, error) {
+	var state OAuthState
+	b, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil {
+		return state, err
+	}
+	err = json.Unmarshal(b, &state)
+	return state, err
+}
+
 func CreateOAuthSession(c *fiber.Ctx) error {
 	userID := getUserID(c)
 	if userID == 0 {
@@ -200,6 +222,7 @@ func CreateOAuthSession(c *fiber.Ctx) error {
 // We now use an ephemeral database session instead of passing the JWT!
 func GoogleAuth(c *fiber.Ctx) error {
 	sessionID := c.Query("session_id")
+	returnTo := c.Query("returnTo")
 	if sessionID == "" {
 		return c.Status(400).SendString("Missing session_id")
 	}
@@ -210,13 +233,24 @@ func GoogleAuth(c *fiber.Ctx) error {
 		return c.Status(400).SendString("Invalid or expired session")
 	}
 
-	url := getGoogleOAuthConfig().AuthCodeURL(sessionID, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+	stateParam := encodeState(sessionID, returnTo)
+	url := getGoogleOAuthConfig().AuthCodeURL(stateParam, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 	return c.Redirect(url)
 }
 
 func GoogleCallback(c *fiber.Ctx) error {
-	stateSessionID := c.Query("state")
+	stateParam := c.Query("state")
 	code := c.Query("code")
+
+	state, err := decodeState(stateParam)
+	if err != nil {
+		return c.Status(400).SendString("Invalid state parameter")
+	}
+	stateSessionID := state.SessionID
+	returnTo := state.ReturnTo
+	if returnTo == "" {
+		returnTo = getFrontendURL()
+	}
 
 	fmt.Println("GoogleCallback received stateSessionID length:", len(stateSessionID), "code length:", len(code))
 
@@ -259,12 +293,12 @@ func GoogleCallback(c *fiber.Ctx) error {
 	db.DB.Create(&provider)
 
 	// Redirect back to dashboard
-	frontendURL := getFrontendURL()
-	return c.Redirect(frontendURL + "/dashboard/providers")
+	return c.Redirect(returnTo + "/dashboard/providers")
 }
 
 func DropboxAuth(c *fiber.Ctx) error {
 	sessionID := c.Query("session_id")
+	returnTo := c.Query("returnTo")
 	if sessionID == "" {
 		return c.Status(400).SendString("Missing session_id")
 	}
@@ -275,8 +309,9 @@ func DropboxAuth(c *fiber.Ctx) error {
 		return c.Status(400).SendString("Invalid or expired session")
 	}
 
+	stateParam := encodeState(sessionID, returnTo)
 	url := getDropboxOAuthConfig().AuthCodeURL(
-		sessionID, 
+		stateParam, 
 		oauth2.SetAuthURLParam("token_access_type", "offline"),
 		oauth2.SetAuthURLParam("force_reapprove", "true"),
 	)
@@ -284,8 +319,18 @@ func DropboxAuth(c *fiber.Ctx) error {
 }
 
 func DropboxCallback(c *fiber.Ctx) error {
-	stateSessionID := c.Query("state")
+	stateParam := c.Query("state")
 	code := c.Query("code")
+
+	state, err := decodeState(stateParam)
+	if err != nil {
+		return c.Status(400).SendString("Invalid state parameter")
+	}
+	stateSessionID := state.SessionID
+	returnTo := state.ReturnTo
+	if returnTo == "" {
+		returnTo = getFrontendURL()
+	}
 
 	// Verify session to get User ID
 	var session models.OAuthSession
@@ -322,8 +367,7 @@ func DropboxCallback(c *fiber.Ctx) error {
 
 	db.DB.Create(&provider)
 
-	frontendURL := getFrontendURL()
-	return c.Redirect(frontendURL + "/dashboard/providers")
+	return c.Redirect(returnTo + "/dashboard/providers")
 }
 
 // ProviderLatency returns the measured network latency from the Go backend to each linked provider.

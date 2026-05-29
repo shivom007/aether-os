@@ -17,7 +17,8 @@ export async function GET(req: NextRequest) {
       })
 
       const GO_API_BASE = process.env.GO_API_URL || "http://localhost:8080/api/v1"
-      return NextResponse.redirect(`${GO_API_BASE}/providers/${provider}/auth?session_id=${res.sessionId}`)
+      const returnTo = encodeURIComponent(req.nextUrl.origin)
+      return NextResponse.redirect(`${GO_API_BASE}/providers/${provider}/auth?session_id=${res.sessionId}&returnTo=${returnTo}`)
     } catch (err) {
       console.error("Failed to create OAuth session:", err)
       return NextResponse.redirect(new URL("/dashboard/providers?error=session_failed", req.url))
