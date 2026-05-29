@@ -21,8 +21,5 @@
   },
   "observability": {
     "enabled": true
-  },
-  "vars": {
-    "GO_API_URL": "https://aether-backend.up.railway.app/api/v1"
   }
 }
