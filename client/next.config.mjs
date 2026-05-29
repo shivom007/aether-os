@@ -59,7 +59,11 @@ const nextConfig = {
         ],
       },
     ]
-  }
+  },
+  env: {
+    // Automatically expose the server URL to the client bundle during build
+    NEXT_PUBLIC_GO_API_URL: process.env.GO_API_URL || "http://localhost:8080/api/v1",
+  },
 }
 
 export default nextConfig
