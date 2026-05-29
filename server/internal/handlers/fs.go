@@ -142,6 +142,13 @@ func RegisterFile(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
+	// SECURITY: Hard server-side limit of 5GB to prevent malicious users from
+	// bypassing frontend checks and exhausting database rows via shard allocations.
+	const maxServerSize = 5 * 1024 * 1024 * 1024
+	if req.Size > maxServerSize {
+		return c.Status(400).JSON(fiber.Map{"error": "File size exceeds the absolute server limit of 5GB"})
+	}
+
 	file := models.File{
 		Name:      req.Name,
 		FolderID:  req.FolderID,
