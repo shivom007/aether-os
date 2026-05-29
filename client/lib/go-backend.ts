@@ -3,7 +3,9 @@
  * The Go backend runs on localhost:8080 and uses Bearer JWT auth.
  */
 
-const GO_API_BASE = process.env.GO_API_URL || "http://localhost:8080/api/v1"
+function getGoApiBase() {
+  return process.env.GO_API_URL || "http://localhost:8080/api/v1"
+}
 
 export interface GoBackendOptions extends RequestInit {
   token?: string | null
@@ -11,7 +13,7 @@ export interface GoBackendOptions extends RequestInit {
 
 export async function goFetch<T = unknown>(path: string, opts: GoBackendOptions = {}): Promise<T> {
   const { token, ...init } = opts
-  const url = `${GO_API_BASE}${path}`
+  const url = `${getGoApiBase()}${path}`
 
   const headers: Record<string, string> = {
     ...(init.headers as Record<string, string> || {}),
@@ -45,7 +47,7 @@ export async function goFetch<T = unknown>(path: string, opts: GoBackendOptions 
  * Fetch binary data (e.g., shard download) from Go backend
  */
 export async function goFetchBinary(path: string, token?: string | null): Promise<ArrayBuffer> {
-  const url = `${GO_API_BASE}${path}`
+  const url = `${getGoApiBase()}${path}`
   const headers: Record<string, string> = {}
   if (token) headers["Authorization"] = `Bearer ${token}`
 
@@ -61,7 +63,7 @@ export async function goFetchBinary(path: string, token?: string | null): Promis
  * Fetch binary data as a readable stream from Go backend
  */
 export async function goFetchStream(path: string, token?: string | null): Promise<ReadableStream<Uint8Array> | null> {
-  const url = `${GO_API_BASE}${path}`
+  const url = `${getGoApiBase()}${path}`
   const headers: Record<string, string> = {}
   if (token) headers["Authorization"] = `Bearer ${token}`
 
