@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Activity, Boxes, Cloud, Cog, HardDrive, LayoutDashboard, Server } from "lucide-react"
+import { Activity, Boxes, Cloud, Cog, HardDrive, LayoutDashboard, Server, FlaskConical } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,7 @@ import {
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/volumes", label: "Volumes", icon: HardDrive },
+  { href: "/dashboard/volumes-testing", label: "Volumes (Testing)", icon: FlaskConical },
   { href: "/dashboard/providers", label: "Providers", icon: Cloud },
   { href: "/dashboard/workers", label: "Workers", icon: Server },
   { href: "/dashboard/observability", label: "Observability", icon: Activity },

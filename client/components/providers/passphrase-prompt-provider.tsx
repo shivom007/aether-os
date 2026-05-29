@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 interface PassphrasePromptContextType {
   requestPassphrase: (title?: string, message?: string) => Promise<string>
@@ -77,34 +78,35 @@ export function PassphrasePromptProvider({ children }: { children: React.ReactNo
     <PassphrasePromptContext.Provider value={{ requestPassphrase }}>
       {children}
       
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-xl relative z-50 animate-in fade-in zoom-in-95 duration-200">
-            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-            
-            <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-              <Input
-                type="password"
-                placeholder="Volume Passphrase"
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                autoFocus
-                autoComplete="off"
-                data-lpignore="true"
-              />
-              <div className="flex justify-end gap-2 mt-2">
-                <Button type="button" variant="ghost" onClick={handleCancel}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={!passphrase}>
-                  Unlock
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) handleCancel()
+      }}>
+        <DialogContent className="sm:max-w-[425px] z-[100]">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{message}</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-2">
+            <Input
+              type="password"
+              placeholder="Volume Passphrase"
+              value={passphrase}
+              onChange={(e) => setPassphrase(e.target.value)}
+              autoFocus
+              autoComplete="off"
+              data-lpignore="true"
+            />
+            <DialogFooter className="mt-2">
+              <Button type="button" variant="ghost" onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!passphrase}>
+                Unlock
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </PassphrasePromptContext.Provider>
   )
 }

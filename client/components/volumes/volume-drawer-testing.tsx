@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { ChunkMap } from "./chunk-map"
-import { UploadZone } from "@/components/upload/upload-zone"
-
+import { UploadZoneGlobal } from "@/components/upload/upload-zone-global"
+import { UploadZoneBatch } from "@/components/upload/upload-zone-batch"
 import { api } from "@/lib/api"
 import { formatBytes, relativeTime } from "@/lib/format"
 import type { Volume, Inode } from "@/lib/types"
 import { FolderOpen } from "lucide-react"
 
-export function VolumeDrawer({
+export function VolumeDrawerTesting({
   volumeId,
   onClose,
 }: {
@@ -75,9 +75,10 @@ export function VolumeDrawer({
             </dl>
 
             <Tabs defaultValue="files">
-              <TabsList className="grid grid-cols-3">
+              <TabsList className="grid grid-cols-4">
                 <TabsTrigger value="files">Files</TabsTrigger>
                 <TabsTrigger value="upload">Upload</TabsTrigger>
+                <TabsTrigger value="batch">Batch (Test)</TabsTrigger>
                 <TabsTrigger value="shards">Shards</TabsTrigger>
               </TabsList>
 
@@ -107,8 +108,19 @@ export function VolumeDrawer({
                 </Button>
               </TabsContent>
 
-              <TabsContent value="upload" className="mt-3">
-                <UploadZone
+              <TabsContent value="upload" className="mt-3 data-[state=inactive]:hidden" forceMount>
+                <UploadZoneGlobal
+                  volumeId={volume.id}
+                  kdfSalt={volume.kdf_salt}
+                  onUploadComplete={() => {
+                    qc.invalidateQueries({ queryKey: ["volume-inodes", volume.id, null] })
+                    qc.invalidateQueries({ queryKey: ["volumes"] })
+                  }}
+                />
+              </TabsContent>
+
+              <TabsContent value="batch" className="mt-3 data-[state=inactive]:hidden" forceMount>
+                <UploadZoneBatch
                   volumeId={volume.id}
                   kdfSalt={volume.kdf_salt}
                   onUploadComplete={() => {

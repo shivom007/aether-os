@@ -142,9 +142,9 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 	results := make(chan UploadResult, 14)
 	var expectedUploads int
 
-	// Semaphore to limit concurrent external provider requests to 3
+	// Semaphore to limit concurrent external provider requests to 8
 	// This prevents rate limits like Dropbox's "too_many_write_operations"
-	sem := make(chan struct{}, 3)
+	sem := make(chan struct{}, 8)
 
 	for i := 0; i < 14; i++ {
 		fileKey := fmt.Sprintf("shard_%d", i)
