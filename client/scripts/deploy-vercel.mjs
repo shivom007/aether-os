@@ -17,7 +17,7 @@ console.log("✅ Converted middleware.ts to proxy.ts");
 try {
   // 2. Deploy
   console.log("☁️ Deploying to Vercel...");
-  execSync('npx vercel --prod', { stdio: 'inherit' });
+  execSync('vercel --prod', { stdio: 'inherit' });
 } catch (error) {
   console.error('❌ Vercel deployment failed.');
 } finally {
