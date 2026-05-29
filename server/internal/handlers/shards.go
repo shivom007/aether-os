@@ -142,6 +142,10 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 	results := make(chan UploadResult, 14)
 	var expectedUploads int
 
+	// Semaphore to limit concurrent external provider requests to 3
+	// This prevents rate limits like Dropbox's "too_many_write_operations"
+	sem := make(chan struct{}, 3)
+
 	for i := 0; i < 14; i++ {
 		fileKey := fmt.Sprintf("shard_%d", i)
 		idKey := fmt.Sprintf("shardId_%d", i)
@@ -158,6 +162,9 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 		fileHeader := files[0]
 		
 		go func(index int, sID string, fh *multipart.FileHeader) {
+			sem <- struct{}{}        // Acquire token
+			defer func() { <-sem }() // Release token
+
 			var shard models.Shard
 			if err := db.DB.First(&shard, sID).Error; err != nil {
 				results <- UploadResult{Index: index, Error: fmt.Errorf("shard not found")}
