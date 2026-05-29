@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { ChunkMap } from "./chunk-map"
 import { UploadZone } from "@/components/upload/upload-zone"
+import { UploadZoneBatch } from "@/components/upload/upload-zone-batch"
 import { api } from "@/lib/api"
 import { formatBytes, relativeTime } from "@/lib/format"
 import type { Volume, Inode } from "@/lib/types"
@@ -108,6 +109,17 @@ export function VolumeDrawer({
 
               <TabsContent value="upload" className="mt-3">
                 <UploadZone
+                  volumeId={volume.id}
+                  kdfSalt={volume.kdf_salt}
+                  onUploadComplete={() => {
+                    qc.invalidateQueries({ queryKey: ["volume-inodes", volume.id, null] })
+                    qc.invalidateQueries({ queryKey: ["volumes"] })
+                  }}
+                />
+              </TabsContent>
+
+              <TabsContent value="batch" className="mt-3">
+                <UploadZoneBatch
                   volumeId={volume.id}
                   kdfSalt={volume.kdf_salt}
                   onUploadComplete={() => {

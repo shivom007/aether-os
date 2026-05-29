@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"mime/multipart"
 
 	"github.com/gofiber/fiber/v2"
 	"aether-server/internal/db"
@@ -125,6 +126,88 @@ func UploadShardHandler(c *fiber.Ctx) error {
 	db.DB.Save(&shard)
 
 	return c.JSON(fiber.Map{"message": "Shard uploaded successfully", "providerFileId": providerFileID})
+}
+
+func UploadChunkBatchHandler(c *fiber.Ctx) error {
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse multipart form"})
+	}
+
+	type UploadResult struct {
+		Index int
+		Error error
+	}
+	
+	results := make(chan UploadResult, 14)
+	var expectedUploads int
+
+	for i := 0; i < 14; i++ {
+		fileKey := fmt.Sprintf("shard_%d", i)
+		idKey := fmt.Sprintf("shardId_%d", i)
+		
+		shardIDStrs, okId := form.Value[idKey]
+		files, okFile := form.File[fileKey]
+		
+		if !okId || !okFile || len(shardIDStrs) == 0 || len(files) == 0 {
+			continue 
+		}
+		
+		expectedUploads++
+		shardIDStr := shardIDStrs[0]
+		fileHeader := files[0]
+		
+		go func(index int, sID string, fh *multipart.FileHeader) {
+			var shard models.Shard
+			if err := db.DB.First(&shard, sID).Error; err != nil {
+				results <- UploadResult{Index: index, Error: fmt.Errorf("shard not found")}
+				return
+			}
+
+			fileData, err := fh.Open()
+			if err != nil {
+				results <- UploadResult{Index: index, Error: err}
+				return
+			}
+			defer fileData.Close()
+
+			provider, cfg, err := ResolveProvider(shard.Provider)
+			if err != nil {
+				results <- UploadResult{Index: index, Error: fmt.Errorf("unsupported provider")}
+				return
+			}
+
+			providerFileID, err := provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+			if err != nil {
+				shard.Status = "missing"
+				db.DB.Save(&shard)
+				results <- UploadResult{Index: index, Error: err}
+				return
+			}
+
+			shard.ProviderFileID = providerFileID
+			shard.Status = "healthy"
+			db.DB.Save(&shard)
+
+			results <- UploadResult{Index: index, Error: nil}
+		}(i, shardIDStr, fileHeader)
+	}
+	
+	// Wait for all goroutines to finish
+	var hasError bool
+	for i := 0; i < expectedUploads; i++ {
+		res := <-results
+		if res.Error != nil {
+			fmt.Printf("Batch upload error on shard index %d: %v\n", res.Index, res.Error)
+			hasError = true
+		}
+	}
+
+	if hasError {
+		return c.Status(500).JSON(fiber.Map{"error": "One or more shards failed to upload"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Batch upload processed successfully"})
 }
 
 func DownloadShardHandler(c *fiber.Ctx) error {

@@ -71,6 +71,7 @@ func main() {
 	// Shard Allocation route
 	api.Post("/shards/allocate", handlers.AllocateShards)
 	api.Post("/shards/upload", handlers.UploadShardHandler)
+	api.Post("/shards/upload/batch", handlers.UploadChunkBatchHandler)
 	api.Get("/shards/download/:id", handlers.DownloadShardHandler)
 
 	// Volumes
