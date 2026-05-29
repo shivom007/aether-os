@@ -75,9 +75,10 @@ export function VolumeDrawer({
             </dl>
 
             <Tabs defaultValue="files">
-              <TabsList className="grid grid-cols-3">
+              <TabsList className="grid grid-cols-4">
                 <TabsTrigger value="files">Files</TabsTrigger>
                 <TabsTrigger value="upload">Upload</TabsTrigger>
+                <TabsTrigger value="batch">Batch (Test)</TabsTrigger>
                 <TabsTrigger value="shards">Shards</TabsTrigger>
               </TabsList>
 
