@@ -191,11 +191,13 @@ export function UploadZone({ volumeId, kdfSalt, onUploadComplete }: UploadZonePr
         return
       }
 
-      const MAX_SIZE = 100 * 1024 * 1024
       const validFiles: File[] = []
       for (const f of acceptedFiles) {
-        if (f.size > MAX_SIZE) {
-          toast.error(`File ${f.name} exceeds the 100MB MVP limit.`)
+        const isVideo = f.type.startsWith("video/")
+        const maxSize = isVideo ? (1024 * 1024 * 1024) : (100 * 1024 * 1024) // 1GB for videos, 100MB for others
+        
+        if (f.size > maxSize) {
+          toast.error(`File ${f.name} exceeds the ${isVideo ? "1GB" : "100MB"} limit.`)
         } else {
           validFiles.push(f)
         }
