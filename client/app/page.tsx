@@ -728,8 +728,8 @@ footer{
         <div class="team-role">FOUNDER · ARCHITECT</div>
         <p class="team-bio">ICT/ELV engineer turned distributed systems architect. Built Aether-OS to solve real data sovereignty problems encountered in large-scale infrastructure projects.</p>
         <div class="team-links">
-          <a href="#">github</a>
-          <a href="#">linkedin</a>
+          <a href="https://github.com/shivom007">github</a>
+          <a href="https://www.linkedin.com/in/shiv-kumar-mahto/">linkedin</a>
         </div>
       </div>
       <div class="team-card fade-up" style="opacity:.5">

@@ -21,11 +21,13 @@ export function FileDetailPanel({
   inode, 
   volumeId,
   kdfSalt,
+  engine = "v1",
   onClose 
 }: { 
   inode: Inode | null; 
   volumeId: string;
   kdfSalt: string | null;
+  engine?: "v1" | "v2";
   onClose: () => void;
 }) {
   const { requestPassphrase } = usePassphrasePrompt()
@@ -71,7 +73,7 @@ export function FileDetailPanel({
     const { masterKey } = await derive_master_key(pass, fromB64(kdfSalt))
     pass = ""
     
-    useDownloadStore.getState().enqueue(inode, volumeId, masterKey)
+    useDownloadStore.getState().enqueue(inode, volumeId, masterKey, kdfSalt, engine)
     toast.success("Added to download queue")
     onClose()
   }

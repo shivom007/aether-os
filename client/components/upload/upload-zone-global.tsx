@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { api } from "@/lib/api"
 import { derive_chunk_key, derive_master_key, encrypt_chunk, fromB64 } from "@/lib/crypto/core"
+import { derive_chunk_key_v2, derive_master_key_v2, encrypt_chunk_v2 } from "@/lib/crypto/core-v2"
 import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
@@ -17,10 +18,11 @@ import { useUploadStore } from "@/lib/store/upload-store"
 export interface UploadZoneGlobalProps {
   volumeId: string
   kdfSalt: string | null // base64
+  engine?: "v1" | "v2"
   onUploadComplete?: (inodeId: string) => void
 }
 
-export function UploadZoneGlobal({ volumeId, kdfSalt, onUploadComplete }: UploadZoneGlobalProps) {
+export function UploadZoneGlobal({ volumeId, kdfSalt, engine = "v1", onUploadComplete }: UploadZoneGlobalProps) {
   const { requestPassphrase } = usePassphrasePrompt()
   const { files, addFiles, updateFile, abortFile } = useUploadStore()
   
@@ -70,12 +72,29 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, onUploadComplete }: Upload
         const start = i * dynamicChunkSize
         const end = Math.min(start + dynamicChunkSize, file.size)
         const slice = new Uint8Array(await file.slice(start, end).arrayBuffer())
-        const chunkKey = await derive_chunk_key(masterKey, vId, i)
-        const { iv, ciphertext } = await encrypt_chunk(slice, chunkKey)
+        const isV2 = engine === "v2"
+        let body: Uint8Array
+        if (isV2) {
+          const saltBytes = fromB64(kdfSalt!)
+          const { chunkKey, nonce } = await derive_chunk_key_v2(masterKey, saltBytes, vId, i)
+          const aadString = `aether:v2:${vId}:${i}:${totalChunks}`
+          const aad = new TextEncoder().encode(aadString)
+          const ciphertext = await encrypt_chunk_v2(slice, chunkKey, nonce, aad)
+          
+          // Memory Zeroing: Securely wipe the plaintext bytes from RAM
+          slice.fill(0)
+          body = ciphertext
+        } else {
+          const chunkKey = await derive_chunk_key(masterKey, vId, i)
+          const { iv, ciphertext } = await encrypt_chunk(slice, chunkKey)
+          
+          // Memory Zeroing: Securely wipe the plaintext bytes from RAM
+          slice.fill(0)
 
-        const body = new Uint8Array(iv.length + ciphertext.length)
-        body.set(iv, 0)
-        body.set(ciphertext, iv.length)
+          body = new Uint8Array(iv.length + ciphertext.length)
+          body.set(iv, 0)
+          body.set(ciphertext, iv.length)
+        }
 
         const encoded = await encodeShards(body)
 
@@ -189,7 +208,7 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, onUploadComplete }: Upload
         return 
       }
 
-      const { masterKey } = await derive_master_key(pass, fromB64(kdfSalt))
+      const { masterKey } = await derive_master_key_v2(pass, fromB64(kdfSalt))
       pass = ""
 
       const newFiles = validFiles.map((f) => ({

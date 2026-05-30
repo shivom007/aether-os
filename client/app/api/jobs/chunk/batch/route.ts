@@ -9,35 +9,19 @@ export async function POST(req: NextRequest) {
   const token = await getGoToken()
 
   try {
-    const formData = await req.formData()
-    
-    // Validate we actually received shards
-    let hasShards = false
-    for (const key of formData.keys()) {
-      if (key.startsWith("shard_")) {
-        hasShards = true
-        break
-      }
-    }
-
-    if (!hasShards) {
-      return fail("No shards found in batch upload", 400)
-    }
-
     const GO_API_BASE = process.env.GO_API_URL || "http://localhost:8080/api/v1"
     
-    // We recreate the FormData to ensure clean boundary and headers to Go
-    const goFormData = new FormData()
-    for (const [key, value] of formData.entries()) {
-      goFormData.append(key, value)
-    }
-
+    // Stream the request body directly to the Go backend
+    // This bypasses the Vercel 4.5MB Serverless Function payload limit
     const response = await fetch(`${GO_API_BASE}/shards/upload/batch`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
+        "Content-Type": req.headers.get("Content-Type") || "multipart/form-data",
       },
-      body: goFormData,
+      body: req.body,
+      // @ts-ignore - Required for node fetch to support streaming bodies
+      duplex: "half",
     })
 
     if (!response.ok) {

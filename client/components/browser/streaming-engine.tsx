@@ -9,12 +9,14 @@ import type { Inode, PhysicalChunk } from "@/lib/types"
 interface StreamingEngineProps {
   volumeId: string
   masterKey: CryptoKey // unextractable WebCrypto key
+  engine?: "v1" | "v2"
+  kdfSalt?: string | null
 }
 
 export const streamingMetaCache = new Map<string, { inode: Inode; chunks: PhysicalChunk[] }>()
 export const prefetchShardCache = new Map<string, Promise<Uint8Array>>()
 
-export function StreamingEngine({ volumeId, masterKey }: StreamingEngineProps) {
+export function StreamingEngine({ volumeId, masterKey, engine = "v1", kdfSalt }: StreamingEngineProps) {
   const isRegistered = useRef(false)
 
   // SW is registered globally by file-list.tsx
@@ -62,16 +64,32 @@ export function StreamingEngine({ volumeId, masterKey }: StreamingEngineProps) {
         if (isLastChunk && inode.size_bytes % CHUNK_SIZE !== 0) {
           unencryptedSize = inode.size_bytes % CHUNK_SIZE
         }
-        const originalSize = unencryptedSize + 16 + 12 // GCM tag + IV
-        
+        let originalSize = unencryptedSize + 16 // GCM tag
+        const isV2 = engine === "v2"
+        if (!isV2) originalSize += 12 // IV
+
         const reconstructed = await reconstructShards(fetchedShards, originalSize)
 
         // 6. Decrypt
-        const iv = reconstructed.slice(0, 12)
-        const ciphertext = reconstructed.slice(12)
-        
-        const chunkKey = await derive_chunk_key(masterKey, volumeId, chunkIndex)
-        return await decrypt_chunk(ciphertext, iv, chunkKey)
+        if (isV2) {
+          if (!kdfSalt) throw new Error("Missing KDF salt for V2 engine")
+          const { derive_chunk_key_v2, decrypt_chunk_v2, fromB64 } = await import("@/lib/crypto/core-v2")
+          
+          const saltBytes = fromB64(kdfSalt)
+          const totalChunks = Math.ceil(inode.size_bytes / CHUNK_SIZE)
+          const { chunkKey, nonce } = await derive_chunk_key_v2(masterKey, saltBytes, volumeId, chunkIndex)
+          
+          const aadString = `aether:v2:${volumeId}:${chunkIndex}:${totalChunks}`
+          const aad = new TextEncoder().encode(aadString)
+          
+          return await decrypt_chunk_v2(reconstructed, chunkKey, nonce, aad)
+        } else {
+          const iv = reconstructed.slice(0, 12)
+          const ciphertext = reconstructed.slice(12)
+          
+          const chunkKey = await derive_chunk_key(masterKey, volumeId, chunkIndex)
+          return await decrypt_chunk(ciphertext, iv, chunkKey)
+        }
       })()
 
       chunkPlaintextCache.set(cacheKey, promise)

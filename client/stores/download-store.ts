@@ -6,6 +6,8 @@ export interface DownloadTask {
   inode: Inode
   volumeId: string
   masterKey: CryptoKey
+  kdfSalt: string
+  engine: "v1" | "v2"
   status: "queued" | "downloading" | "complete" | "error"
   progress: number
   error?: string
@@ -13,7 +15,7 @@ export interface DownloadTask {
 
 interface DownloadStore {
   queue: DownloadTask[]
-  enqueue: (inode: Inode, volumeId: string, masterKey: CryptoKey) => void
+  enqueue: (inode: Inode, volumeId: string, masterKey: CryptoKey, kdfSalt: string, engine?: "v1" | "v2") => void
   remove: (id: string) => void
   updateTask: (id: string, updates: Partial<DownloadTask>) => void
   clearCompleted: () => void
@@ -21,7 +23,7 @@ interface DownloadStore {
 
 export const useDownloadStore = create<DownloadStore>((set) => ({
   queue: [],
-  enqueue: (inode, volumeId, masterKey) => {
+  enqueue: (inode, volumeId, masterKey, kdfSalt, engine = "v1") => {
     set((state) => {
       // Don't enqueue if already in queue and not complete/error
       if (state.queue.some((t) => t.inode.id === inode.id && (t.status === "queued" || t.status === "downloading"))) {
@@ -35,6 +37,8 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
             inode,
             volumeId,
             masterKey,
+            kdfSalt,
+            engine,
             status: "queued",
             progress: 0,
           },

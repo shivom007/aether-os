@@ -41,6 +41,7 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
             <UploadZoneGlobal 
               volumeId={volumeId} 
               kdfSalt={volume?.kdf_salt ?? null} 
+              engine="v2"
               onUploadComplete={() => {
                 qc.invalidateQueries({ queryKey: ["inodes-children"] })
                 qc.invalidateQueries({ queryKey: ["inodes-root", volumeId] })
@@ -57,6 +58,7 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
             onSelect={setSelectedInode}
             selectedId={selectedInode?.id}
             kdfSalt={volume?.kdf_salt ?? null}
+            engine="v2"
           />
         </section>
 
@@ -65,6 +67,7 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
             inode={selectedInode} 
             volumeId={volumeId}
             kdfSalt={volume?.kdf_salt ?? null}
+            engine="v2"
             onClose={() => setSelectedInode(null)} 
           />
         </aside>

@@ -40,12 +40,14 @@ export function FileList({
   onSelect,
   selectedId,
   kdfSalt,
+  engine = "v1",
 }: {
   volumeId: string
   parentId: string | null
   onSelect: (n: Inode) => void
   selectedId?: string
   kdfSalt: string | null
+  engine?: "v1" | "v2"
 }) {
   const qc = useQueryClient()
   const [viewMode, setViewMode] = useState<"list" | "grid">("list")
@@ -96,7 +98,7 @@ export function FileList({
     for (const id of selectedIds) {
       const node = inodesList.find((n) => n.id === id)
       if (node && node.kind !== "dir") {
-        store.enqueue(node, volumeId, masterKey)
+        store.enqueue(node, volumeId, masterKey, kdfSalt, engine)
         count++
       }
     }
@@ -383,7 +385,7 @@ export function FileList({
                       }
                       const { masterKey } = await derive_master_key(pass, fromB64(kdfSalt))
                       pass = ""
-                      useDownloadStore.getState().enqueue(n, volumeId, masterKey)
+                      useDownloadStore.getState().enqueue(n, volumeId, masterKey, kdfSalt, engine)
                       toast.success("Added to download queue")
                     }}>
                       <Download className="mr-2 size-4" aria-hidden /> Download
@@ -481,7 +483,7 @@ export function FileList({
                     }
                     const { masterKey } = await derive_master_key(pass, fromB64(kdfSalt))
                     pass = ""
-                    useDownloadStore.getState().enqueue(n, volumeId, masterKey)
+                    useDownloadStore.getState().enqueue(n, volumeId, masterKey, kdfSalt, engine)
                     toast.success("Added to download queue")
                   }}>
                     <Download className="mr-2 size-4" aria-hidden /> Download
@@ -523,7 +525,7 @@ export function FileList({
           {playingVideo && (
             isSwReady ? (
               <>
-                <StreamingEngine volumeId={volumeId} masterKey={playingVideo.masterKey} />
+                <StreamingEngine volumeId={volumeId} masterKey={playingVideo.masterKey} engine={engine} kdfSalt={kdfSalt} />
                 <video 
                   controls 
                   autoPlay 

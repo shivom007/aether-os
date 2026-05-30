@@ -191,7 +191,7 @@ export async function fetchMinimumShards(
             if (successCount < DATA_SHARDS && !abortController.signal.aborted) {
               console.log(`[Hedging] Fastest shard took ${fastestShardTimeMs!}ms. Hedging at ${fastestShardTimeMs! + margin}ms by firing parity shards.`)
               while (nextToFetch < sortedShards.length) {
-                startNextFetch()
+                startNextFetch().catch(() => {})
               }
             }
           }, margin)
@@ -206,14 +206,14 @@ export async function fetchMinimumShards(
         checkCompletion()
         
         // When one fails, immediately try the next available one
-        startNextFetch()
+        startNextFetch().catch(() => {})
       }
     }
 
     // Kick off the first DATA_SHARDS (10) requests concurrently
     const initialConcurrency = Math.min(DATA_SHARDS, sortedShards.length)
     for (let i = 0; i < initialConcurrency; i++) {
-      startNextFetch()
+      startNextFetch().catch(() => {})
     }
   })
 }

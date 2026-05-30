@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { useDownloadStore } from "@/stores/download-store"
 import { api } from "@/lib/api"
 import { derive_chunk_key, decrypt_chunk } from "@/lib/crypto/core"
+import { derive_chunk_key_v2, decrypt_chunk_v2, fromB64 } from "@/lib/crypto/core-v2"
 import { reconstructShards, DATA_SHARDS, TOTAL_SHARDS, fetchMinimumShards } from "@/lib/erasure"
 import type { Inode, PhysicalChunk } from "@/lib/types"
 
@@ -83,20 +84,35 @@ export function DownloadManager() {
             }
           }
           
-          const originalSize = unencryptedSize + 16 + 12
+          const isV2 = nextTask.engine === "v2"
+          
+          let originalSize = unencryptedSize + 16
+          if (!isV2) originalSize += 12
+          
           const reconstructed = await reconstructShards(fetchedShards, originalSize)
 
-          const iv = reconstructed.slice(0, 12)
-          const ciphertext = reconstructed.slice(12)
-
-          const chunkKey = await derive_chunk_key(masterKey, nextTask.volumeId, i)
-          const plaintext = await decrypt_chunk(ciphertext, iv, chunkKey)
+          let plaintext: Uint8Array
+          if (isV2) {
+            const saltBytes = fromB64(nextTask.kdfSalt)
+            const { chunkKey, nonce } = await derive_chunk_key_v2(masterKey, saltBytes, nextTask.volumeId, i)
+            const aadString = `aether:v2:${nextTask.volumeId}:${i}:${totalChunks}`
+            const aad = new TextEncoder().encode(aadString)
+            plaintext = await decrypt_chunk_v2(reconstructed, chunkKey, nonce, aad)
+          } else {
+            const iv = reconstructed.slice(0, 12)
+            const ciphertext = reconstructed.slice(12)
+            const chunkKey = await derive_chunk_key(masterKey, nextTask.volumeId, i)
+            plaintext = await decrypt_chunk(ciphertext, iv, chunkKey)
+          }
           
           chunkData.push(plaintext)
         }
 
         const mime = nextTask.inode.mime_type || "application/octet-stream"
         const blob = new Blob(chunkData as any[], { type: mime })
+
+        // Memory Zeroing: Securely wipe the decrypted chunks from RAM now that the Blob has copied them
+        chunkData.forEach(c => c.fill(0))
         const url = URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = url

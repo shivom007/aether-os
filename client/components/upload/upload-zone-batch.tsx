@@ -4,8 +4,10 @@ import { useCallback } from "react"
 import { useDropzone } from "react-dropzone"
 import { Upload as UploadIcon, X } from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 import { api } from "@/lib/api"
-import { derive_chunk_key, derive_master_key, encrypt_chunk, fromB64 } from "@/lib/crypto/core"
+import { derive_chunk_key_v2, derive_master_key_v2, encrypt_chunk_v2, fromB64 } from "@/lib/crypto/core-v2"
 import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
@@ -64,12 +66,20 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
         const start = i * dynamicChunkSize
         const end = Math.min(start + dynamicChunkSize, file.size)
         const slice = new Uint8Array(await file.slice(start, end).arrayBuffer())
-        const chunkKey = await derive_chunk_key(masterKey, volumeId, i)
-        const { iv, ciphertext } = await encrypt_chunk(slice, chunkKey)
+        // V2 Crypto Engine
+        const saltBytes = fromB64(kdfSalt)
+        const { chunkKey, nonce } = await derive_chunk_key_v2(masterKey, saltBytes, volumeId, i)
+        
+        const aadString = `aether:v2:${volumeId}:${i}:${totalChunks}`
+        const aad = new TextEncoder().encode(aadString)
+        
+        const ciphertext = await encrypt_chunk_v2(slice, chunkKey, nonce, aad)
 
-        const body = new Uint8Array(iv.length + ciphertext.length)
-        body.set(iv, 0)
-        body.set(ciphertext, iv.length)
+        // Memory Zeroing: Securely wipe the plaintext bytes from RAM
+        slice.fill(0)
+
+        // Since V2 doesn't prepend the IV, the body is just the ciphertext!
+        const body = ciphertext
 
         const encoded = await encodeShards(body)
 
@@ -154,7 +164,7 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
         return
       }
 
-      const { masterKey } = await derive_master_key(pass, fromB64(kdfSalt))
+      const { masterKey } = await derive_master_key_v2(pass, fromB64(kdfSalt))
       pass = ""
 
       const newFiles = validFiles.map((f) => ({
