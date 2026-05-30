@@ -12,8 +12,7 @@ export function AlertBanner() {
   const q = useQuery({
     queryKey: ["system-health"],
     queryFn: async (): Promise<HealthResponse> => {
-      const url = `${process.env.NEXT_PUBLIC_GO_API_URL || "http://localhost:8080/api/v1"}/health`
-      const res = await fetch(url)
+      const res = await fetch("/api/health")
       if (!res.ok) throw new Error("Health ping failed")
       return res.json()
     },

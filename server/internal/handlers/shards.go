@@ -113,8 +113,30 @@ func UploadShardHandler(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Unsupported provider"})
 	}
 
-	// Dispatch to simulated cloud provider
-	providerFileID, err := provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+	var providerFileID string
+	var uploadErr error
+	maxRetries := 3
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Seek to beginning before every attempt (vital for retries on a stream)
+		fileData.Seek(0, 0)
+		
+		providerFileID, uploadErr = provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+		if uploadErr == nil {
+			break // Success
+		}
+		
+		// Check if it's a Dropbox rate limit error
+		if strings.Contains(uploadErr.Error(), "too_many_write_operations") {
+			if attempt < maxRetries {
+				fmt.Printf("Rate limit hit on shard %d (attempt %d). Retrying in 1.5s...\n", shard.ID, attempt)
+				time.Sleep(1500 * time.Millisecond)
+				continue
+			}
+		}
+		// Other error or exhausted retries
+		break
+	}
 	
 	// Check if the shard was deleted from the DB (i.e. frontend aborted upload and called DeleteInode)
 	var checkShard models.Shard
@@ -127,8 +149,8 @@ func UploadShardHandler(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Upload aborted"})
 	}
 
-	if err != nil {
-		fmt.Printf("Provider UploadShard failed for %s: %v\n", shard.Provider, err)
+	if uploadErr != nil {
+		fmt.Printf("Provider UploadShard failed for %s: %v\n", shard.Provider, uploadErr)
 		checkShard.Status = "missing"
 		db.DB.Save(&checkShard)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to upload to provider"})
