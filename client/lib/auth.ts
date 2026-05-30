@@ -2,8 +2,8 @@ import { SignJWT, jwtVerify } from "jose"
 import { cookies } from "next/headers"
 import type { SessionUser } from "./types"
 
-const ACCESS_TTL_SEC = 15 * 60
-const REFRESH_TTL_SEC = 7 * 24 * 60 * 60
+const ACCESS_TTL_SEC = 24 * 60 * 60   // 24 hours
+const REFRESH_TTL_SEC = 7 * 24 * 60 * 60 // 7 days
 
 function secret(): Uint8Array {
   const s = process.env.AUTH_JWT_SECRET

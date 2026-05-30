@@ -23,7 +23,7 @@ function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => p !== "/" && (pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p)))
 }
 
-const ACCESS_TTL_SEC = 15 * 60
+const ACCESS_TTL_SEC = 24 * 60 * 60 // 24 hours — must match lib/auth.ts
 
 async function makeSecret() {
   const s = process.env.AUTH_JWT_SECRET
