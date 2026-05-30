@@ -112,7 +112,7 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, engine = "v1", onUploadCom
         })
 
         // UPLOAD ALL SHARDS CONCURRENTLY
-        const maxConcurrent = 14; // Go backend handles rate limits, we can send all 14 at once now
+        const maxConcurrent = 8;
         let running = 0;
         let currentIndex = 0;
         const totalShards = allocation.allocations.length;
