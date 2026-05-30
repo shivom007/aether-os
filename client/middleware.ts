@@ -55,7 +55,7 @@ export async function middleware(req: NextRequest) {
 
   // 🔄 2. Access token expired — try to silently re-issue using expired token's identity
   // We trust the presence of the refresh cookie as the "session is still alive" signal
-  if (refreshToken && goToken && accessToken) {
+  if (refreshToken && accessToken) {
     try {
       // Decode the expired access token with relaxed clock to extract user identity
       const { payload } = await jwtVerify(accessToken, secret, {
