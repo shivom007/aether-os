@@ -115,17 +115,29 @@ func UploadShardHandler(c *fiber.Ctx) error {
 
 	// Dispatch to simulated cloud provider
 	providerFileID, err := provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+	
+	// Check if the shard was deleted from the DB (i.e. frontend aborted upload and called DeleteInode)
+	var checkShard models.Shard
+	if dbErr := db.DB.First(&checkShard, shard.ID).Error; dbErr != nil {
+		// Shard was deleted! The upload was aborted.
+		// Prevent orphan file leak by immediately deleting the file we just uploaded
+		if providerFileID != "" && providerFileID != "pending" {
+			provider.DeleteShard(providerFileID, cfg)
+		}
+		return c.Status(400).JSON(fiber.Map{"error": "Upload aborted"})
+	}
+
 	if err != nil {
 		fmt.Printf("Provider UploadShard failed for %s: %v\n", shard.Provider, err)
-		shard.Status = "missing"
-		db.DB.Save(&shard)
+		checkShard.Status = "missing"
+		db.DB.Save(&checkShard)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to upload to provider"})
 	}
 
 	// Update shard status on success
-	shard.ProviderFileID = providerFileID
-	shard.Status = "healthy"
-	db.DB.Save(&shard)
+	checkShard.ProviderFileID = providerFileID
+	checkShard.Status = "healthy"
+	db.DB.Save(&checkShard)
 
 	return c.JSON(fiber.Map{"message": "Shard uploaded successfully", "providerFileId": providerFileID})
 }
@@ -211,16 +223,26 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 				break
 			}
 
+			// Check if the shard was deleted from the DB (i.e. frontend aborted upload)
+			var checkShard models.Shard
+			if dbErr := db.DB.First(&checkShard, shard.ID).Error; dbErr != nil {
+				if providerFileID != "" && providerFileID != "pending" {
+					provider.DeleteShard(providerFileID, cfg)
+				}
+				results <- UploadResult{Index: index, Error: fmt.Errorf("upload aborted")}
+				return
+			}
+
 			if uploadErr != nil {
-				shard.Status = "missing"
-				db.DB.Save(&shard)
+				checkShard.Status = "missing"
+				db.DB.Save(&checkShard)
 				results <- UploadResult{Index: index, Error: uploadErr}
 				return
 			}
 
-			shard.ProviderFileID = providerFileID
-			shard.Status = "healthy"
-			db.DB.Save(&shard)
+			checkShard.ProviderFileID = providerFileID
+			checkShard.Status = "healthy"
+			db.DB.Save(&checkShard)
 
 			results <- UploadResult{Index: index, Error: nil}
 		}(i, shardIDStr, fileHeader)
