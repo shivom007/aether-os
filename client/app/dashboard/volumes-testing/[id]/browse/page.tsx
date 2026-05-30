@@ -7,7 +7,7 @@ import type { Inode, Volume } from "@/lib/types"
 import { FileTree } from "@/components/browser/file-tree"
 import { FileList } from "@/components/browser/file-list"
 import { FileDetailPanel } from "@/components/browser/file-detail-panel"
-import { UploadZoneBatch } from "@/components/upload/upload-zone-batch"
+import { UploadZoneGlobal } from "@/components/upload/upload-zone-global"
 
 export default function BrowsePage({ params }: { params: Promise<{ id: string }> }) {
   const { id: volumeId } = use(params)
@@ -38,9 +38,10 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
           />
           <div className="mt-4 rounded-lg border bg-card p-3">
             <p className="mb-2 text-xs font-medium text-muted-foreground">Upload to this volume</p>
-            <UploadZoneBatch 
+            <UploadZoneGlobal 
               volumeId={volumeId} 
               kdfSalt={volume?.kdf_salt ?? null} 
+              engine="v2"
               onUploadComplete={() => {
                 qc.invalidateQueries({ queryKey: ["inodes-children"] })
                 qc.invalidateQueries({ queryKey: ["inodes-root", volumeId] })

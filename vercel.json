@@ -1,0 +1,10 @@
+{
+  "experimentalServices": {
+    "server": {
+      "root": "server",
+      "entrypoint": "cmd/api/main.go",
+      "routePrefix": "/",
+      "buildCommand": "go build -o main ./cmd/api"
+    }
+  }
+}

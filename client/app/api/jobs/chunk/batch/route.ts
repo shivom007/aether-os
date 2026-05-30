@@ -3,6 +3,8 @@ import { ok, fail } from "@/lib/api"
 import { getSession } from "@/lib/auth"
 import { getGoToken } from "@/lib/go-token"
 
+export const runtime = "edge"
+
 export async function POST(req: NextRequest) {
   const s = await getSession()
   if (!s) return fail("unauthorized", 401)

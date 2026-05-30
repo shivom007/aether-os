@@ -52,3 +52,5 @@ aether.db-journal
 *.ps1
 test*.js
 test*.ts
+
+.vercel
