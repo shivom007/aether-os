@@ -95,30 +95,25 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
           signal: abort.signal,
         })
 
+        const formData = new FormData();
         const totalShards = allocation.allocations.length;
-        const BATCH_SIZE = 8;
         
-        for (let batchStart = 0; batchStart < totalShards; batchStart += BATCH_SIZE) {
-          const formData = new FormData();
-          const batchEnd = Math.min(batchStart + BATCH_SIZE, totalShards);
-          
-          for (let idxShard = batchStart; idxShard < batchEnd; idxShard++) {
-            if (idxShard >= encoded.shards.length) continue;
-            const shard = allocation.allocations[idxShard];
-            formData.append(`shard_${idxShard}`, new Blob([encoded.shards[idxShard] as any]), `shard_${i}_${idxShard}`);
-            formData.append(`shardId_${idxShard}`, String(shard.shardId));
-          }
+        for (let idxShard = 0; idxShard < totalShards; idxShard++) {
+          if (idxShard >= encoded.shards.length) continue;
+          const shard = allocation.allocations[idxShard];
+          formData.append(`shard_${idxShard}`, new Blob([encoded.shards[idxShard] as any]), `shard_${i}_${idxShard}`);
+          formData.append(`shardId_${idxShard}`, String(shard.shardId));
+        }
 
-          const res = await fetch(`/api/jobs/chunk/batch`, {
-            method: "POST",
-            body: formData,
-            signal: abort.signal,
-          });
+        const res = await fetch(`/api/jobs/chunk/batch`, {
+          method: "POST",
+          body: formData,
+          signal: abort.signal,
+        });
 
-          if (!res.ok) {
-            const errText = await res.text().catch(() => "Upload failed");
-            throw new Error(`Chunk ${i} mini-batch upload failed: ${errText}`);
-          }
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "Upload failed");
+          throw new Error(`Chunk ${i} batch upload failed: ${errText}`);
         }
 
         globalCompletedShards += totalShards;
