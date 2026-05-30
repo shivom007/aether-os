@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { jwtVerify } from "jose"
+import { jwtVerify, SignJWT } from "jose"
 
 const PUBLIC_PATHS = [
   "/",
@@ -23,13 +23,12 @@ function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => p !== "/" && (pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p)))
 }
 
-async function verifyToken(token: string, secret: string): Promise<boolean> {
-  try {
-    await jwtVerify(token, new TextEncoder().encode(secret), { issuer: "aether", audience: "aether:dashboard" })
-    return true
-  } catch {
-    return false
-  }
+const ACCESS_TTL_SEC = 15 * 60
+
+async function makeSecret() {
+  const s = process.env.AUTH_JWT_SECRET
+  if (!s) throw new Error("AUTH_JWT_SECRET missing")
+  return new TextEncoder().encode(s)
 }
 
 export async function middleware(req: NextRequest) {
@@ -37,44 +36,68 @@ export async function middleware(req: NextRequest) {
 
   if (isPublic(pathname)) return NextResponse.next()
 
-  const token = req.cookies.get("aether_access")?.value
+  const accessToken = req.cookies.get("aether_access")?.value
   const refreshToken = req.cookies.get("aether_refresh")?.value
-  const secret = process.env.AUTH_JWT_SECRET
+  const goToken = req.cookies.get("aether_go_token")?.value
 
-  // ✅ Access token is valid — let through
-  if (token && secret && await verifyToken(token, secret)) {
-    return NextResponse.next()
-  }
+  const secret = await makeSecret().catch(() => null)
+  if (!secret) return NextResponse.next() // misconfigured — let through
 
-  // 🔄 Access token expired but refresh token exists — attempt silent refresh
-  if (refreshToken) {
+  // ✅ 1. Access token is valid — let through immediately
+  if (accessToken) {
     try {
-      const refreshUrl = new URL("/api/auth/refresh", req.url)
-      const refreshRes = await fetch(refreshUrl.toString(), {
-        method: "POST",
-        headers: {
-          // Forward the cookies so the refresh route can read them
-          cookie: req.headers.get("cookie") || "",
-        },
-      })
-
-      if (refreshRes.ok) {
-        // Refresh succeeded — forward the new Set-Cookie headers and continue
-        const response = NextResponse.next()
-        const setCookieHeader = refreshRes.headers.getSetCookie?.() ?? 
-          [refreshRes.headers.get("set-cookie")].filter(Boolean) as string[]
-        
-        for (const cookie of setCookieHeader) {
-          response.headers.append("set-cookie", cookie)
-        }
-        return response
-      }
-    } catch (err) {
-      console.error("Silent refresh failed:", err)
+      await jwtVerify(accessToken, secret, { issuer: "aether", audience: "aether:dashboard" })
+      return NextResponse.next()
+    } catch {
+      // Expired or invalid — fall through to refresh
     }
   }
 
-  // ❌ Both tokens missing or refresh failed — redirect to login
+  // 🔄 2. Access token expired — try to silently re-issue using expired token's identity
+  // We trust the presence of the refresh cookie as the "session is still alive" signal
+  if (refreshToken && goToken && accessToken) {
+    try {
+      // Decode the expired access token with relaxed clock to extract user identity
+      const { payload } = await jwtVerify(accessToken, secret, {
+        issuer: "aether",
+        audience: "aether:dashboard",
+        clockTolerance: 60 * 60 * 24 * 7, // allow up to 7 days expired
+      })
+
+      const sub = payload.sub as string
+      const email = payload.email as string
+
+      if (sub && email) {
+        // Issue a brand new access token directly in the middleware
+        const newAccessToken = await new SignJWT({ email })
+          .setProtectedHeader({ alg: "HS256" })
+          .setSubject(sub)
+          .setIssuedAt()
+          .setIssuer("aether")
+          .setAudience("aether:dashboard")
+          .setExpirationTime(`${ACCESS_TTL_SEC}s`)
+          .sign(secret)
+
+        const isProd = process.env.NODE_ENV === "production"
+        const response = NextResponse.next()
+
+        // Stamp the fresh access token cookie onto the response
+        response.cookies.set("aether_access", newAccessToken, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: "lax",
+          path: "/",
+          maxAge: ACCESS_TTL_SEC,
+        })
+
+        return response
+      }
+    } catch (err) {
+      console.error("Silent token refresh failed:", err)
+    }
+  }
+
+  // ❌ 3. Cannot refresh — redirect to login
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ success: false, error: "unauthorized" }, { status: 401 })
   }
