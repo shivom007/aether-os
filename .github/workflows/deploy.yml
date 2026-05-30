@@ -18,7 +18,7 @@ jobs:
         run: npm i -g @railway/cli
 
       - name: Deploy to Railway
-        run: railway up ./server --path-as-root --service aether-backend --detach
+        run: railway up ./server --path-as-root --project a984c8a9-4a96-442d-b3a4-da1d13de2163 --environment ca7ea859-3dc6-4715-b875-49d0de54b6cc --service aether-backend --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
@@ -33,6 +33,6 @@ jobs:
         run: npm i -g @railway/cli
 
       - name: Deploy to Railway
-        run: railway up ./client --path-as-root --service aether-frontend --detach
+        run: railway up ./client --path-as-root --project a984c8a9-4a96-442d-b3a4-da1d13de2163 --environment ca7ea859-3dc6-4715-b875-49d0de54b6cc --service aether-frontend --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
