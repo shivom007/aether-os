@@ -16,9 +16,12 @@ export async function GET(req: NextRequest) {
         body: JSON.stringify({ provider })
       })
 
-      const GO_API_BASE = process.env.GO_API_URL || "http://localhost:8080/api/v1"
-      const returnTo = encodeURIComponent(req.nextUrl.origin)
-      return NextResponse.redirect(`${GO_API_BASE}/providers/${provider}/auth?session_id=${res.sessionId}&returnTo=${returnTo}`)
+      // IMPORTANT: This redirect goes to the BROWSER, so we MUST use the public backend URL.
+      // GO_API_URL is the internal Railway URL and is unreachable from the public internet.
+      const PUBLIC_GO_API_BASE = process.env.PUBLIC_GO_API_URL || "http://localhost:8080/api/v1"
+      const frontendOrigin = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin
+      const returnTo = encodeURIComponent(frontendOrigin)
+      return NextResponse.redirect(`${PUBLIC_GO_API_BASE}/providers/${provider}/auth?session_id=${res.sessionId}&returnTo=${returnTo}`)
     } catch (err) {
       console.error("Failed to create OAuth session:", err)
       return NextResponse.redirect(new URL("/dashboard/providers?error=session_failed", req.url))
