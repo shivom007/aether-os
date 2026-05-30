@@ -7,6 +7,8 @@ on:
     paths:
       - 'client/**'
       - 'server/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
 
 jobs:
   deploy-backend:
