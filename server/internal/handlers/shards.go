@@ -114,9 +114,29 @@ func UploadShardHandler(c *fiber.Ctx) error {
 	}
 
 	// Dispatch to simulated cloud provider
-	providerFileID, err := provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
-	if err != nil {
-		fmt.Printf("Provider UploadShard failed for %s: %v\n", shard.Provider, err)
+	var providerFileID string
+	var uploadErr error
+	maxRetries := 3
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		fileData.Seek(0, 0) // reset reader for retries
+		providerFileID, uploadErr = provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+		if uploadErr == nil {
+			break // Success
+		}
+
+		if strings.Contains(uploadErr.Error(), "too_many_write_operations") || strings.Contains(uploadErr.Error(), "rate_limit") || strings.Contains(uploadErr.Error(), "too_many_requests") {
+			if attempt < maxRetries {
+				fmt.Printf("Rate limit hit on shard %d (attempt %d). Retrying in 1.5s...\n", shard.ID, attempt)
+				time.Sleep(1500 * time.Millisecond)
+				continue
+			}
+		}
+		break
+	}
+
+	if uploadErr != nil {
+		fmt.Printf("Provider UploadShard failed for %s: %v\n", shard.Provider, uploadErr)
 		shard.Status = "missing"
 		db.DB.Save(&shard)
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to upload to provider"})
