@@ -36,6 +36,17 @@ func getAPIBaseURL() string {
 	return url
 }
 
+// getPublicAPIBaseURL returns the publicly accessible backend URL.
+// This MUST be used for OAuth callbacks — internal Railway URLs are unreachable by Google/Dropbox.
+func getPublicAPIBaseURL() string {
+	url := os.Getenv("PUBLIC_API_BASE_URL")
+	if url != "" {
+		return url
+	}
+	// Fall back to API_BASE_URL if PUBLIC_API_BASE_URL is not explicitly set
+	return getAPIBaseURL()
+}
+
 func getFrontendURL() string {
 	url := os.Getenv("FRONTEND_URL")
 	if url == "" {
@@ -49,7 +60,7 @@ func getGoogleOAuthConfig() *oauth2.Config {
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		Endpoint:     google.Endpoint,
-		RedirectURL:  getAPIBaseURL() + "/providers/google/callback",
+		RedirectURL:  getPublicAPIBaseURL() + "/providers/google/callback",
 		Scopes:       []string{"https://www.googleapis.com/auth/drive.file"},
 	}
 }
@@ -62,7 +73,7 @@ func getDropboxOAuthConfig() *oauth2.Config {
 			AuthURL:  "https://www.dropbox.com/oauth2/authorize",
 			TokenURL: "https://api.dropboxapi.com/oauth2/token",
 		},
-		RedirectURL: getAPIBaseURL() + "/providers/dropbox/callback",
+		RedirectURL: getPublicAPIBaseURL() + "/providers/dropbox/callback",
 	}
 }
 
