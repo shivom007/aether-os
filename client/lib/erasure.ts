@@ -175,7 +175,7 @@ export async function fetchMinimumShards(
       const shard = sortedShards[nextToFetch++]
       try {
         const data = await fetcher(shard.id, abortController.signal)
-        if (abortController.signal.aborted) return
+        if (abortController.signal.aborted) return // silently discard — we already have enough
         
         fetched[shard.shard_index] = data
         successCount++
@@ -200,7 +200,8 @@ export async function fetchMinimumShards(
         if (onProgress) onProgress()
         checkCompletion()
       } catch (err) {
-        if (abortController.signal.aborted) return
+        // Silently ignore AbortErrors — these are expected when we have enough shards
+        if ((err as Error)?.name === "AbortError" || abortController.signal.aborted) return
         console.warn(`[Shard ${shard.shard_index}] failed:`, err)
         failCount++
         checkCompletion()
