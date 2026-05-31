@@ -29,9 +29,22 @@ type ShardAllocationResponse struct {
 var availableProviders = []string{"GoogleDrive", "Dropbox"}
 
 func AllocateShards(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
 	var req AllocateShardRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	var fileVersion models.FileVersion
+	if err := db.DB.Model(&models.FileVersion{}).
+		Joins("JOIN files ON files.id = file_versions.file_id").
+		Where("file_versions.id = ? AND files.user_id = ?", req.FileVersionID, userID).
+		First(&fileVersion).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "File version not found"})
 	}
 
 	// Look up chunk or create it if not exists
@@ -48,8 +61,6 @@ func AllocateShards(c *fiber.Ctx) error {
 	// Delete existing pending shards for this chunk to prevent duplicates on retry
 	db.DB.Where("chunk_id = ? AND status = ?", chunk.ID, "pending").Delete(&models.Shard{})
 
-	// Fetch User Providers
-	userID := getUserID(c)
 	var userProviders []models.UserProvider
 	db.DB.Where("user_id = ?", userID).Find(&userProviders)
 
@@ -92,13 +103,18 @@ func AllocateShards(c *fiber.Ctx) error {
 }
 
 func UploadShardHandler(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
 	shardIDStr := c.FormValue("shardId")
 	if shardIDStr == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Missing shardId form value"})
 	}
 
 	var shard models.Shard
-	if err := db.DB.First(&shard, shardIDStr).Error; err != nil {
+	if err := shardQueryForUser(userID).Where("shards.id = ?", shardIDStr).First(&shard).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Shard allocation not found"})
 	}
 
@@ -171,6 +187,11 @@ func UploadShardHandler(c *fiber.Ctx) error {
 }
 
 func UploadChunkBatchHandler(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
 	form, err := c.MultipartForm()
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse multipart form"})
@@ -226,7 +247,7 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 	}
 
 	var shards []models.Shard
-	if err := db.DB.Where("id IN ?", shardIDs).Find(&shards).Error; err != nil {
+	if err := shardQueryForUser(userID).Where("shards.id IN ?", shardIDs).Find(&shards).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Failed to load shard allocations"})
 	}
 
@@ -359,10 +380,15 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 }
 
 func DownloadShardHandler(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
 	shardIDStr := c.Params("id")
 
 	var shard models.Shard
-	if err := db.DB.First(&shard, shardIDStr).Error; err != nil {
+	if err := shardQueryForUser(userID).Where("shards.id = ?", shardIDStr).First(&shard).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Shard not found"})
 	}
 
@@ -379,6 +405,14 @@ func DownloadShardHandler(c *fiber.Ctx) error {
 
 	c.Set("Content-Type", "application/octet-stream")
 	return c.SendStream(reader)
+}
+
+func shardQueryForUser(userID uint) *gorm.DB {
+	return db.DB.Model(&models.Shard{}).
+		Joins("JOIN chunks ON chunks.id = shards.chunk_id").
+		Joins("JOIN file_versions ON file_versions.id = chunks.file_version_id").
+		Joins("JOIN files ON files.id = file_versions.file_id").
+		Where("files.user_id = ?", userID)
 }
 
 func batchMarkShardsHealthy(providerFileIDs map[uint]string) error {

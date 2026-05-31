@@ -4,6 +4,7 @@ import { ok, fail } from "@/lib/api"
 import { getSession } from "@/lib/auth"
 import { goFetch } from "@/lib/go-backend"
 import { getGoToken } from "@/lib/go-token"
+import { toFolderInodeID, toGoNumericID } from "@/lib/inodes"
 import type { Inode } from "@/lib/types"
 
 const Body = z.object({
@@ -26,14 +27,16 @@ export async function POST(req: NextRequest) {
 
   try {
     if (kind === "dir") {
+      const parentId = toGoNumericID(parent_id)
+
       // Create folder in Go backend
       const result = await goFetch<{ id: number; name: string }>("/fs/folder", {
         method: "POST",
         token,
-        body: JSON.stringify({ name, parentId: parent_id ? parseInt(parent_id) : null, volumeId: volume_id }),
+        body: JSON.stringify({ name, parentId, volumeId: volume_id }),
       })
       const inode: Inode = {
-        id: String(result.id),
+        id: toFolderInodeID(result.id),
         volume_id: volume_id,
         parent_id: parent_id || null,
         name: result.name,
@@ -48,26 +51,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Register file in Go backend
-    const result = await goFetch<{ file: { id: number; name: string; size: number; mimeType: string; createdAt: string }; versionId: number }>(
+    const parentId = toGoNumericID(parent_id)
+    const result = await goFetch<{ file: { id: number; name: string; size: number; mimeType: string; thumbnail?: string; volumeId: string; folderId: number | null; createdAt: string; updatedAt: string }; versionId: number }>(
       "/fs/file",
       {
         method: "POST",
         token,
-        body: JSON.stringify({ name, size: size_bytes, mimeType: mime_type || "application/octet-stream", parentId: parent_id ? parseInt(parent_id) : null, volumeId: volume_id, thumbnail }),
+        body: JSON.stringify({ name, size: size_bytes, mimeType: mime_type || "application/octet-stream", folderId: parentId, volumeId: volume_id, thumbnail }),
       }
     )
 
     const inode: Inode = {
       id: String(result.file.id),
-      volume_id: "default",
-      parent_id: null,
+      volume_id: result.file.volumeId || volume_id,
+      parent_id: result.file.folderId ? toFolderInodeID(result.file.folderId) : null,
       name: result.file.name,
       kind: "file",
       size_bytes: result.file.size,
       mime_type: result.file.mimeType,
+      thumbnail_b64: result.file.thumbnail || null,
       materialized_path: "/" + result.file.name,
       created_at: result.file.createdAt,
-      updated_at: result.file.createdAt,
+      updated_at: result.file.updatedAt || result.file.createdAt,
     }
 
     return ok({ ...inode, versionId: result.versionId })

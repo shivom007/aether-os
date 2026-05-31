@@ -22,9 +22,30 @@ export async function signAccessToken(user: SessionUser): Promise<string> {
     .sign(secret())
 }
 
+export async function signRefreshToken(user: SessionUser): Promise<string> {
+  return new SignJWT({ email: user.email, typ: "refresh" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(user.sub)
+    .setIssuedAt()
+    .setIssuer("aether")
+    .setAudience("aether:refresh")
+    .setExpirationTime(`${REFRESH_TTL_SEC}s`)
+    .sign(secret())
+}
+
 export async function verifyAccessToken(token: string): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, secret(), { issuer: "aether", audience: "aether:dashboard" })
+    return { sub: payload.sub as string, email: payload.email as string }
+  } catch {
+    return null
+  }
+}
+
+export async function verifyRefreshToken(token: string): Promise<SessionUser | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret(), { issuer: "aether", audience: "aether:refresh" })
+    if (payload.typ !== "refresh") return null
     return { sub: payload.sub as string, email: payload.email as string }
   } catch {
     return null

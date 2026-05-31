@@ -17,11 +17,12 @@ import { useUploadStore } from "@/lib/store/upload-store"
 
 export interface UploadZoneProps {
   volumeId: string
+  parentId?: string | null
   kdfSalt: string | null // base64
   onUploadComplete?: (inodeId: string) => void
 }
 
-export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZoneProps) {
+export function UploadZoneBatch({ volumeId, parentId = null, kdfSalt, onUploadComplete }: UploadZoneProps) {
   const { requestPassphrase } = usePassphrasePrompt()
   const { files, addFiles, updateFile, abortFile } = useUploadStore()
   const volumeFiles = Object.values(files).filter(f => f.volumeId === volumeId)
@@ -41,9 +42,10 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
       
       const inode = await api<Inode>("/api/inodes", {
         method: "POST",
-        body: JSON.stringify({
-          volume_id: volumeId,
-          name: file.name,
+          body: JSON.stringify({
+            volume_id: volumeId,
+            parent_id: parentId,
+            name: file.name,
           kind: "file",
           size_bytes: file.size,
           mime_type: file.type,
@@ -186,7 +188,7 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
         processFile(validFiles[i], fileData.id, fileData.abort, masterKey, kdfSalt)
       }
     },
-    [volumeId, kdfSalt, requestPassphrase, addFiles],
+    [volumeId, parentId, kdfSalt, requestPassphrase, addFiles],
   )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })

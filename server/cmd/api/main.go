@@ -4,12 +4,12 @@ import (
 	"log"
 	"os"
 
+	"aether-server/internal/db"
+	"aether-server/internal/filestore"
+	"aether-server/internal/handlers"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"aether-server/internal/db"
-	"aether-server/internal/handlers"
-	"aether-server/internal/filestore"
 	"github.com/joho/godotenv"
 )
 
@@ -30,8 +30,12 @@ func main() {
 
 	// Middleware
 	app.Use(logger.New())
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*", // For development MVP
+		AllowOrigins: frontendURL,
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
 
@@ -42,21 +46,22 @@ func main() {
 
 	// API Routes Group
 	api := app.Group("/api/v1")
-	
+
 	// Auth routes
 	api.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "message": "Aether API v1 is running."})
 	})
 	api.Post("/auth/register", handlers.Register)
 	api.Post("/auth/login", handlers.Login)
-	
+
 	// File system routes
 	api.Get("/fs", handlers.ListFiles)
 	api.Post("/fs/folder", handlers.CreateFolder)
+	api.Delete("/fs/folder/:id", handlers.DeleteFolder)
 	api.Post("/fs/file", handlers.RegisterFile)
 	api.Get("/fs/file/:id", handlers.GetFileDetails)
 	api.Delete("/fs/file/:id", handlers.DeleteFile)
-	
+
 	// Providers
 	api.Get("/providers", handlers.ListProviders)
 	api.Get("/providers/latency", handlers.ProviderLatency)
@@ -67,7 +72,7 @@ func main() {
 	api.Get("/providers/google/callback", handlers.GoogleCallback)
 	api.Get("/providers/dropbox/auth", handlers.DropboxAuth)
 	api.Get("/providers/dropbox/callback", handlers.DropboxCallback)
-	
+
 	// Shard Allocation route
 	api.Post("/shards/allocate", handlers.AllocateShards)
 	api.Post("/shards/upload", handlers.UploadShardHandler)

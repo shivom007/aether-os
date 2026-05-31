@@ -9,14 +9,16 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"aether-server/internal/crypto"
 	"aether-server/internal/db"
 	"aether-server/internal/models"
+	"github.com/gofiber/fiber/v2"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"gorm.io/gorm"
 )
 
 type AWSCredentialsRequest struct {
@@ -55,6 +57,23 @@ func getFrontendURL() string {
 	return url
 }
 
+func sanitizeReturnTo(returnTo string) string {
+	frontendURL := strings.TrimRight(getFrontendURL(), "/")
+	if returnTo == "" {
+		return frontendURL
+	}
+
+	trimmed := strings.TrimRight(returnTo, "/")
+	if trimmed == frontendURL || strings.HasPrefix(trimmed, frontendURL+"/") {
+		return trimmed
+	}
+	return frontendURL
+}
+
+func oauthSessionQuery(sessionID string) *gorm.DB {
+	return db.DB.Where("id = ? AND created_at >= ?", sessionID, time.Now().Add(-15*time.Minute))
+}
+
 func getGoogleOAuthConfig() *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -89,12 +108,13 @@ func ListProviders(c *fiber.Ctx) error {
 
 	// Return sanitized list with config details
 	type ProviderResponse struct {
-		ID           uint   `json:"id"`
-		Provider     string `json:"provider"`
-		ProviderType string `json:"providerType"`
-		EndpointURL  string `json:"endpointUrl"`
-		Bucket       string `json:"bucket"`
-		Region       string `json:"region"`
+		ID           uint      `json:"id"`
+		Provider     string    `json:"provider"`
+		ProviderType string    `json:"providerType"`
+		EndpointURL  string    `json:"endpointUrl"`
+		Bucket       string    `json:"bucket"`
+		Region       string    `json:"region"`
+		CreatedAt    time.Time `json:"createdAt"`
 	}
 	res := []ProviderResponse{}
 	for _, p := range userProviders {
@@ -118,6 +138,7 @@ func ListProviders(c *fiber.Ctx) error {
 			EndpointURL:  cfg["endpointUrl"],
 			Bucket:       cfg["bucket"],
 			Region:       cfg["region"],
+			CreatedAt:    p.CreatedAt,
 		})
 	}
 
@@ -237,14 +258,14 @@ func GoogleAuth(c *fiber.Ctx) error {
 	if sessionID == "" {
 		return c.Status(400).SendString("Missing session_id")
 	}
-	
+
 	// Verify session exists
 	var session models.OAuthSession
-	if err := db.DB.Where("id = ?", sessionID).First(&session).Error; err != nil {
+	if err := oauthSessionQuery(sessionID).First(&session).Error; err != nil {
 		return c.Status(400).SendString("Invalid or expired session")
 	}
 
-	stateParam := encodeState(sessionID, returnTo)
+	stateParam := encodeState(sessionID, sanitizeReturnTo(returnTo))
 	url := getGoogleOAuthConfig().AuthCodeURL(stateParam, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 	return c.Redirect(url)
 }
@@ -258,21 +279,15 @@ func GoogleCallback(c *fiber.Ctx) error {
 		return c.Status(400).SendString("Invalid state parameter")
 	}
 	stateSessionID := state.SessionID
-	returnTo := state.ReturnTo
-	if returnTo == "" {
-		returnTo = getFrontendURL()
-	}
-
-	fmt.Println("GoogleCallback received stateSessionID length:", len(stateSessionID), "code length:", len(code))
+	returnTo := sanitizeReturnTo(state.ReturnTo)
 
 	// Verify session to get User ID
 	var session models.OAuthSession
-	if err := db.DB.Where("id = ?", stateSessionID).First(&session).Error; err != nil {
+	if err := oauthSessionQuery(stateSessionID).First(&session).Error; err != nil {
 		return c.Status(401).SendString("Unauthorized callback: invalid state")
 	}
 
 	userID := session.UserID
-	fmt.Println("GoogleCallback resolved userID:", userID)
 
 	// Delete the session so it can't be reused
 	db.DB.Delete(&session)
@@ -313,16 +328,16 @@ func DropboxAuth(c *fiber.Ctx) error {
 	if sessionID == "" {
 		return c.Status(400).SendString("Missing session_id")
 	}
-	
+
 	// Verify session exists
 	var session models.OAuthSession
-	if err := db.DB.Where("id = ?", sessionID).First(&session).Error; err != nil {
+	if err := oauthSessionQuery(sessionID).First(&session).Error; err != nil {
 		return c.Status(400).SendString("Invalid or expired session")
 	}
 
-	stateParam := encodeState(sessionID, returnTo)
+	stateParam := encodeState(sessionID, sanitizeReturnTo(returnTo))
 	url := getDropboxOAuthConfig().AuthCodeURL(
-		stateParam, 
+		stateParam,
 		oauth2.SetAuthURLParam("token_access_type", "offline"),
 		oauth2.SetAuthURLParam("force_reapprove", "true"),
 	)
@@ -338,14 +353,11 @@ func DropboxCallback(c *fiber.Ctx) error {
 		return c.Status(400).SendString("Invalid state parameter")
 	}
 	stateSessionID := state.SessionID
-	returnTo := state.ReturnTo
-	if returnTo == "" {
-		returnTo = getFrontendURL()
-	}
+	returnTo := sanitizeReturnTo(state.ReturnTo)
 
 	// Verify session to get User ID
 	var session models.OAuthSession
-	if err := db.DB.Where("id = ?", stateSessionID).First(&session).Error; err != nil {
+	if err := oauthSessionQuery(stateSessionID).First(&session).Error; err != nil {
 		return c.Status(401).SendString("Unauthorized callback: invalid state")
 	}
 
@@ -416,7 +428,7 @@ func ProviderLatency(c *fiber.Ctx) error {
 		if err != nil {
 			continue
 		}
-		
+
 		// Set a dummy authorization so the API gateway parses it rather than immediate edge block
 		req.Header.Set("Authorization", "Bearer invalid_token")
 

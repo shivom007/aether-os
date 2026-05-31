@@ -128,16 +128,6 @@ export function StreamingEngine({ volumeId, masterKey, engine = "v1", kdfSalt }:
           const targetShards = chunks.filter((c: any) => c.chunk_index === chunkIndex)
           if (targetShards.length === 0) throw new Error(`Chunk ${chunkIndex} missing from DB`)
 
-          const fetchedShards = await fetchMinimumShards(targetShards, async (shardId, signal) => {
-            if (prefetchShardCache.has(shardId)) {
-              return await prefetchShardCache.get(shardId)!
-            }
-            const res = await fetch(`/api/shards/${shardId}`, { signal })
-            if (!res.ok) throw new Error(`Shard ${shardId} returned ${res.status}`)
-            const buffer = await res.arrayBuffer()
-            return new Uint8Array(buffer)
-          })
-
           // 5. Decrypt current chunk (will use cache if available)
           const plaintext = await getDecryptedChunk(inodeId, chunkIndex)
 
@@ -207,7 +197,7 @@ export function StreamingEngine({ volumeId, masterKey, engine = "v1", kdfSalt }:
 
     navigator.serviceWorker.addEventListener("message", handleMessage)
     return () => navigator.serviceWorker.removeEventListener("message", handleMessage)
-  }, [volumeId, masterKey])
+  }, [volumeId, masterKey, engine, kdfSalt])
 
   return null // Headless component
 }

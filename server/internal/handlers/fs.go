@@ -37,7 +37,14 @@ func getUserID(c *fiber.Ctx) uint {
 	tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil // jwtSecret is shared from auth.go in the handlers package
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		secret := getJWTSecret()
+		if len(secret) == 0 {
+			return nil, fmt.Errorf("jwt secret is not configured")
+		}
+		return secret, nil
 	})
 
 	if err != nil {
@@ -61,6 +68,30 @@ func getUserID(c *fiber.Ctx) uint {
 	return uint(idFloat)
 }
 
+func ensureVolumeOwnership(userID uint, volumeID string) error {
+	if volumeID == "" {
+		return fmt.Errorf("volumeId is required")
+	}
+
+	var volume models.Volume
+	if err := db.DB.Where("id = ? AND user_id = ?", volumeID, userID).First(&volume).Error; err != nil {
+		return fmt.Errorf("volume not found")
+	}
+	return nil
+}
+
+func ensureFolderOwnership(userID uint, volumeID string, folderID *uint) error {
+	if folderID == nil {
+		return nil
+	}
+
+	var folder models.Folder
+	if err := db.DB.Where("id = ? AND user_id = ? AND volume_id = ?", *folderID, userID, volumeID).First(&folder).Error; err != nil {
+		return fmt.Errorf("folder not found")
+	}
+	return nil
+}
+
 func CreateFolder(c *fiber.Ctx) error {
 	userID := getUserID(c)
 	if userID == 0 {
@@ -70,6 +101,12 @@ func CreateFolder(c *fiber.Ctx) error {
 	var req CreateFolderRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+	if err := ensureVolumeOwnership(userID, req.VolumeID); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err := ensureFolderOwnership(userID, req.VolumeID, req.ParentID); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	folder := models.Folder{
@@ -84,6 +121,36 @@ func CreateFolder(c *fiber.Ctx) error {
 	}
 
 	return c.Status(201).JSON(folder)
+}
+
+func DeleteFolder(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	folderID := c.Params("id")
+	var folder models.Folder
+	if err := db.DB.Where("id = ? AND user_id = ?", folderID, userID).First(&folder).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Folder not found"})
+	}
+
+	var childFolders int64
+	if err := db.DB.Model(&models.Folder{}).Where("parent_id = ? AND user_id = ?", folder.ID, userID).Count(&childFolders).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to check folder contents"})
+	}
+	var childFiles int64
+	if err := db.DB.Model(&models.File{}).Where("folder_id = ? AND user_id = ?", folder.ID, userID).Count(&childFiles).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to check folder contents"})
+	}
+	if childFolders > 0 || childFiles > 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Folder is not empty"})
+	}
+
+	if err := db.DB.Delete(&folder).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete folder"})
+	}
+	return c.JSON(fiber.Map{"message": "Folder deleted successfully"})
 }
 
 func ListFiles(c *fiber.Ctx) error {
@@ -141,6 +208,12 @@ func RegisterFile(c *fiber.Ctx) error {
 	var req FileMetadataRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+	if err := ensureVolumeOwnership(userID, req.VolumeID); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err := ensureFolderOwnership(userID, req.VolumeID, req.FolderID); err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	// SECURITY: Hard server-side limit of 1GB to match the frontend video limit.

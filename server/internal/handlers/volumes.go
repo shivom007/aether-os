@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"github.com/gofiber/fiber/v2"
 	"aether-server/internal/db"
 	"aether-server/internal/models"
+	"github.com/gofiber/fiber/v2"
 )
 
 type CreateVolumeRequest struct {
@@ -101,8 +101,18 @@ func DeleteVolume(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "Volume not found"})
 	}
 
-	// For a complete implementation we should delete all files inside the volume.
-	// For now, we'll just delete the volume record and let files be orphaned or cascade deleted.
+	var fileCount int64
+	if err := db.DB.Model(&models.File{}).Where("volume_id = ? AND user_id = ?", id, userID).Count(&fileCount).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to check volume contents"})
+	}
+	var folderCount int64
+	if err := db.DB.Model(&models.Folder{}).Where("volume_id = ? AND user_id = ?", id, userID).Count(&folderCount).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to check volume contents"})
+	}
+	if fileCount > 0 || folderCount > 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Volume is not empty"})
+	}
+
 	db.DB.Delete(&vol)
 	return c.JSON(fiber.Map{"deleted": id})
 }

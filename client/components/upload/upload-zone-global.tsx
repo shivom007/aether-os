@@ -18,12 +18,13 @@ import { useUploadStore } from "@/lib/store/upload-store"
 
 export interface UploadZoneGlobalProps {
   volumeId: string
+  parentId?: string | null
   kdfSalt: string | null // base64
   engine?: "v1" | "v2"
   onUploadComplete?: (inodeId: string) => void
 }
 
-export function UploadZoneGlobal({ volumeId, kdfSalt, engine = "v1", onUploadComplete }: UploadZoneGlobalProps) {
+export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = "v1", onUploadComplete }: UploadZoneGlobalProps) {
   const { requestPassphrase } = usePassphrasePrompt()
   const { files, addFiles, updateFile, abortFile } = useUploadStore()
   
@@ -46,9 +47,10 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, engine = "v1", onUploadCom
       
       const inode = await api<Inode>("/api/inodes", {
         method: "POST",
-        body: JSON.stringify({
-          volume_id: vId,
-          name: file.name,
+          body: JSON.stringify({
+            volume_id: vId,
+            parent_id: parentId,
+            name: file.name,
           kind: "file",
           size_bytes: file.size,
           mime_type: file.type,
@@ -230,7 +232,7 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, engine = "v1", onUploadCom
         processFile(validFiles[i], fileData.id, fileData.abort, masterKey, volumeId)
       }
     },
-    [volumeId, kdfSalt, requestPassphrase, addFiles] // no dependency on processFile to avoid stale closures
+    [volumeId, parentId, kdfSalt, requestPassphrase, addFiles] // no dependency on processFile to avoid stale closures
   )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })

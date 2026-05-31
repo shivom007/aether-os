@@ -3,6 +3,7 @@ import { ok, fail } from "@/lib/api"
 import { getSession } from "@/lib/auth"
 import { goFetch } from "@/lib/go-backend"
 import { getGoToken } from "@/lib/go-token"
+import { toFolderInodeID, toGoID } from "@/lib/inodes"
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const s = await getSession()
@@ -13,9 +14,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   try {
     const file = await goFetch<{
       id: number
+      volumeId: string
+      folderId?: number | null
       name: string
       size: number
       mimeType: string
+      thumbnail?: string
       createdAt: string
       updatedAt: string
       versions?: Array<{
@@ -36,12 +40,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
     const inode = {
       id: String(file.id),
-      volume_id: "default",
-      parent_id: null,
+      volume_id: file.volumeId,
+      parent_id: file.folderId ? toFolderInodeID(file.folderId) : null,
       name: file.name,
       kind: "file" as const,
       size_bytes: file.size,
       mime_type: file.mimeType,
+      thumbnail_b64: file.thumbnail || null,
       materialized_path: "/" + file.name,
       created_at: file.createdAt,
       updated_at: file.updatedAt,
@@ -77,7 +82,12 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
   const token = await getGoToken()
 
   try {
-    await goFetch(`/fs/file/${id}`, { method: "DELETE", token })
+    const goID = toGoID(id)
+    if (id.startsWith("folder-")) {
+      await goFetch(`/fs/folder/${goID}`, { method: "DELETE", token })
+    } else {
+      await goFetch(`/fs/file/${goID}`, { method: "DELETE", token })
+    }
     return ok({ deleted: id })
   } catch (err) {
     return fail((err as Error).message, 500)

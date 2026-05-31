@@ -1,16 +1,24 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"encoding/hex"
+	"os"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt/v5"
 	"aether-server/internal/db"
 	"aether-server/internal/models"
+	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("super-secret-key-for-mvp") // In prod, load from env
+func getJWTSecret() []byte {
+	secret := os.Getenv("GO_JWT_SECRET")
+	if secret == "" {
+		secret = os.Getenv("AUTH_JWT_SECRET")
+	}
+	return []byte(secret)
+}
 
 type RegisterRequest struct {
 	Username string `json:"username"`
@@ -66,14 +74,15 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid auth hash format"})
 	}
 
-	// Compare hashes (constant time comparison is better in prod, but simple slice comparison works for MVP)
+	if len(getJWTSecret()) == 0 {
+		return c.Status(500).JSON(fiber.Map{"error": "Server auth secret is not configured"})
+	}
+
 	if len(user.AuthHash) != len(reqHashBytes) {
 		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
-	for i := range user.AuthHash {
-		if user.AuthHash[i] != reqHashBytes[i] {
-			return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
-		}
+	if subtle.ConstantTimeCompare(user.AuthHash, reqHashBytes) != 1 {
+		return c.Status(401).JSON(fiber.Map{"error": "Invalid credentials"})
 	}
 
 	// Create JWT token
@@ -82,7 +91,7 @@ func Login(c *fiber.Ctx) error {
 		"exp":     time.Now().Add(time.Hour * 72).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	t, err := token.SignedString(jwtSecret)
+	t, err := token.SignedString(getJWTSecret())
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Could not login"})
 	}

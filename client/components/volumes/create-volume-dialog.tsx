@@ -108,10 +108,10 @@ export function CreateVolumeDialog({
               <FieldLabel htmlFor="vol-pass">Passphrase</FieldLabel>
               <Input
                 id="vol-pass"
-                type="text"
+                type="password"
                 value={passphrase}
                 onChange={(e) => setPassphrase(e.target.value)}
-                autoComplete="off"
+                autoComplete="new-password"
                 data-lpignore="true"
               />
               <FieldDescription>

@@ -19,6 +19,7 @@ export async function GET() {
       endpointUrl: string
       bucket: string
       region: string
+      createdAt: string
     }>>("/providers", { token })
 
     // Map Go backend format to dashboard format
@@ -29,9 +30,9 @@ export async function GET() {
       endpoint_url: p.endpointUrl || null,
       bucket: p.bucket,
       region: p.region || null,
-      status: "healthy" as const,
+      status: "unknown" as const,
       last_checked_at: null,
-      created_at: new Date().toISOString(),
+      created_at: p.createdAt,
     }))
 
     return ok(mapped)
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
       endpoint_url: parsed.data.endpoint_url,
       bucket,
       region,
-      status: "healthy",
+      status: "unknown",
       last_checked_at: null,
       created_at: new Date().toISOString(),
     })

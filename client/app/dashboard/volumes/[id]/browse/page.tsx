@@ -40,6 +40,7 @@ export default function BrowsePage({ params }: { params: Promise<{ id: string }>
             <p className="mb-2 text-xs font-medium text-muted-foreground">Upload to this volume</p>
             <UploadZone 
               volumeId={volumeId} 
+              parentId={currentDirId}
               kdfSalt={volume?.kdf_salt ?? null} 
               onUploadComplete={() => {
                 qc.invalidateQueries({ queryKey: ["inodes-children"] })

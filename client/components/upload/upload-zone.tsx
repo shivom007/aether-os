@@ -16,6 +16,7 @@ import type { Inode } from "@/lib/types"
 
 export interface UploadZoneProps {
   volumeId: string
+  parentId?: string | null
   kdfSalt: string | null // base64
   onUploadComplete?: (inodeId: string) => void
 }
@@ -29,7 +30,7 @@ interface FileProgress {
   inodeId?: string
 }
 
-export function UploadZone({ volumeId, kdfSalt, onUploadComplete }: UploadZoneProps) {
+export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplete }: UploadZoneProps) {
   const { requestPassphrase } = usePassphrasePrompt()
   const [files, setFiles] = useState<FileProgress[]>([])
 
@@ -53,6 +54,7 @@ export function UploadZone({ volumeId, kdfSalt, onUploadComplete }: UploadZonePr
           method: "POST",
           body: JSON.stringify({
             volume_id: volumeId,
+            parent_id: parentId,
             name: file.name,
             kind: "file",
             size_bytes: file.size,
@@ -183,7 +185,7 @@ export function UploadZone({ volumeId, kdfSalt, onUploadComplete }: UploadZonePr
         if (msg !== "cancelled") toast.error(msg)
       }
     },
-    [volumeId, kdfSalt, onUploadComplete],
+    [volumeId, parentId, kdfSalt, onUploadComplete],
   )
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {

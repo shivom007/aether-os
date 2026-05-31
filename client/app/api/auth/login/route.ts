@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
 import { z } from "zod"
 import { ok, fail } from "@/lib/api"
-import { setAuthCookies, signAccessToken, newRefreshToken } from "@/lib/auth"
+import { setAuthCookies, signAccessToken, signRefreshToken } from "@/lib/auth"
 import { goFetch } from "@/lib/go-backend"
 import { cookies } from "next/headers"
 
@@ -40,8 +40,9 @@ export async function POST(req: NextRequest) {
 
     // Issue dashboard JWT cookies
     const userId = email.toLowerCase()
-    const access = await signAccessToken({ sub: userId, email: email.toLowerCase() })
-    const { token: refresh } = await newRefreshToken()
+    const user = { sub: userId, email: email.toLowerCase() }
+    const access = await signAccessToken(user)
+    const refresh = await signRefreshToken(user)
     await setAuthCookies(access, refresh)
 
     // Store the Go backend token in a separate cookie

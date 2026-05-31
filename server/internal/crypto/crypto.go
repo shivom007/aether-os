@@ -12,27 +12,25 @@ import (
 )
 
 // getEncryptionKey gets the 32-byte AES key from the environment.
-func getEncryptionKey() []byte {
+func getEncryptionKey() ([]byte, error) {
 	keyStr := os.Getenv("PROVIDER_ENCRYPTION_KEY")
 	if keyStr == "" {
-		// 32-byte fallback key for local dev. INSECURE FOR PROD.
-		keyStr = "local_dev_fallback_key_32_bytes!!" 
+		return nil, errors.New("PROVIDER_ENCRYPTION_KEY is not set")
 	}
-	
+
 	key := []byte(keyStr)
-	if len(key) < 32 {
-		padded := make([]byte, 32)
-		copy(padded, key)
-		key = padded
-	} else if len(key) > 32 {
-		key = key[:32]
+	if len(key) != 32 {
+		return nil, errors.New("PROVIDER_ENCRYPTION_KEY must be exactly 32 bytes")
 	}
-	return key
+	return key, nil
 }
 
 // EncryptProviderConfig encrypts plaintext JSON using AES-GCM and returns a base64 string
 func EncryptProviderConfig(plaintext string) (string, error) {
-	key := getEncryptionKey()
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", err
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -65,7 +63,10 @@ func DecryptProviderConfig(encryptedBase64 string) (string, error) {
 		return "", err
 	}
 
-	key := getEncryptionKey()
+	key, err := getEncryptionKey()
+	if err != nil {
+		return "", err
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
