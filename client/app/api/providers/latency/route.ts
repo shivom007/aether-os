@@ -2,6 +2,7 @@ import { ok, fail } from "@/lib/api"
 import { getSession } from "@/lib/auth"
 import { goFetch } from "@/lib/go-backend"
 import { getGoToken } from "@/lib/go-token"
+import { ProviderLatencyResult } from "@/lib/types"
 
 export async function GET() {
   const s = await getSession()
@@ -9,7 +10,7 @@ export async function GET() {
   const token = await getGoToken()
 
   try {
-    const latencies = await goFetch<Record<string, number>>("/providers/latency", { token })
+    const latencies = await goFetch<ProviderLatencyResult[]>("/providers/latency", { token })
     return ok(latencies)
   } catch (err) {
     return fail((err as Error).message, 500)

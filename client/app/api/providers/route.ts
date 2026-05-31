@@ -20,9 +20,10 @@ export async function GET() {
       bucket: string
       region: string
       createdAt: string
+      status: string        // ← add this
+      lastCheckedAt: string | null  // ← and this
     }>>("/providers", { token })
 
-    // Map Go backend format to dashboard format
     const mapped: ProviderCredential[] = providers.map((p) => ({
       id: String(p.id),
       owner_id: s.sub,
@@ -30,8 +31,8 @@ export async function GET() {
       endpoint_url: p.endpointUrl || null,
       bucket: p.bucket,
       region: p.region || null,
-      status: "unknown" as const,
-      last_checked_at: null,
+      status: (p.status as ProviderCredential["status"]) ?? "unknown",  // ← map from Go
+      last_checked_at: p.lastCheckedAt || null,
       created_at: p.createdAt,
     }))
 
@@ -68,8 +69,6 @@ export async function POST(req: NextRequest) {
   const { provider_type, bucket, region, access_key, secret_key } = parsed.data
 
   try {
-    // We treat all user-added providers (s3, gcs, azure, b2) as S3-compatible 
-    // since the Go backend LinkAWS handles S3-compat storage given access/secret keys and optional custom endpoint.
     const result = await goFetch<{ id: number; message: string }>("/providers/aws", {
       method: "POST",
       token,
@@ -83,6 +82,21 @@ export async function POST(req: NextRequest) {
       }),
     })
 
+    // Immediately health check so status isn't stuck on "unknown"
+    let initialStatus: ProviderCredential["status"] = "unknown"
+    let lastCheckedAt: string | null = null
+    try {
+      const health = await goFetch<{ status: string; latencyMs: number }>(
+        `/providers/${result.id}/health`,
+        { method: "POST", token }
+      )
+      initialStatus = (health.status as ProviderCredential["status"]) ?? "unknown"
+      lastCheckedAt = new Date().toISOString()
+    } catch {
+      initialStatus = "unhealthy"
+      lastCheckedAt = new Date().toISOString()
+    }
+
     return ok({
       id: String(result.id),
       owner_id: s.sub,
@@ -90,8 +104,8 @@ export async function POST(req: NextRequest) {
       endpoint_url: parsed.data.endpoint_url,
       bucket,
       region,
-      status: "unknown",
-      last_checked_at: null,
+      status: initialStatus,
+      last_checked_at: lastCheckedAt,
       created_at: new Date().toISOString(),
     })
   } catch (err) {

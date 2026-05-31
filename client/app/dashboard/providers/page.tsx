@@ -11,7 +11,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Cloud } from "lucide-react"
 import { api } from "@/lib/api"
 import { relativeTime } from "@/lib/format"
-import type { ProviderCredential } from "@/lib/types"
+import type { ProviderCredential, ProviderLatencyResult } from "@/lib/types"
 import { AddProviderDialog } from "@/components/providers/add-provider-dialog"
 
 export default function ProvidersPage() {
@@ -24,9 +24,10 @@ export default function ProvidersPage() {
     refetchInterval: 30_000,
   })
 
+  // Update the query type
   const { data: latencies } = useQuery({
     queryKey: ["provider-latencies"],
-    queryFn: () => api<Record<string, number>>("/api/providers/latency"),
+    queryFn: () => api<Record<string, ProviderLatencyResult>>("/api/providers/latency"),
     refetchInterval: 15_000,
   })
 
@@ -112,74 +113,79 @@ export default function ProvidersPage() {
               </TableRow>
             ) : (
               rows.map((p) => {
-                const latency = latencies?.[p.id]
-                const latencyColor = latency ? (latency < 200 ? "text-emerald-500" : latency < 600 ? "text-yellow-500" : "text-destructive") : ""
-                
+                const latencyResult = latencies?.[p.id]
+                const latencyMs = latencyResult?.latencyMs
+                const latencyStatus = latencyResult?.status
+                const effectiveStatus = latencyStatus === "unhealthy" ? "unhealthy" : p.status
+                const latencyColor = latencyMs !== undefined
+                  ? latencyMs < 200 ? "text-emerald-500"
+                    : latencyMs < 600 ? "text-yellow-500"
+                      : "text-destructive"
+                  : ""
+
                 return (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono uppercase text-xs">{p.provider_type}</TableCell>
-                  <TableCell>
-                    <span className="font-mono text-xs whitespace-nowrap">
-                      {p.endpoint_url ? `${p.endpoint_url} / ` : ""}
-                      {p.bucket}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm">{p.region || "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{relativeTime(p.created_at)}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                          p.status === "healthy"
-                            ? "text-emerald-500"
-                            : p.status === "unhealthy"
-                              ? "text-destructive"
-                              : "text-muted-foreground"
-                        }`}
-                      >
-                        <span
-                          aria-hidden
-                          className={`size-2 rounded-full ${
-                            p.status === "healthy"
-                              ? "bg-emerald-500"
-                              : p.status === "unhealthy"
-                                ? "bg-destructive"
-                                : "bg-muted-foreground"
-                          }`}
-                        />
-                        {p.status}
+                  <TableRow key={p.id}>
+                    <TableCell className="font-mono uppercase text-xs">{p.provider_type}</TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs whitespace-nowrap">
+                        {p.endpoint_url ? `${p.endpoint_url} / ` : ""}
+                        {p.bucket}
                       </span>
-                      {latency !== undefined && (
-                        <span className={`text-[10px] font-mono ${latencyColor}`}>
-                          {latency}ms
+                    </TableCell>
+                    <TableCell className="text-sm">{p.region || "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{relativeTime(p.created_at)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-medium ${effectiveStatus === "healthy"
+                              ? "text-emerald-500"
+                              : effectiveStatus === "unhealthy"
+                                ? "text-destructive"
+                                : "text-muted-foreground"
+                            }`}
+                        >
+                          <span
+                            aria-hidden
+                            className={`size-2 rounded-full ${effectiveStatus === "healthy"
+                                ? "bg-emerald-500"
+                                : effectiveStatus === "unhealthy"
+                                  ? "bg-destructive"
+                                  : "bg-muted-foreground"
+                              }`}
+                          />
+                          {effectiveStatus}
                         </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={check.isPending}
-                        onClick={() => check.mutate(p.id)}
-                        aria-label="Re-check health"
-                      >
-                        <RefreshCw className="size-4" aria-hidden />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Remove provider ${p.bucket}?`)) del.mutate(p.id)
-                        }}
-                        aria-label="Remove provider"
-                      >
-                        <Trash2 className="size-4 text-destructive" aria-hidden />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                        {latencyMs !== undefined && (
+                          <span className={`text-[10px] font-mono ${latencyColor}`}>
+                            {latencyMs}ms · {latencyStatus}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={check.isPending}
+                          onClick={() => check.mutate(p.id)}
+                          aria-label="Re-check health"
+                        >
+                          <RefreshCw className="size-4" aria-hidden />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`Remove provider ${p.bucket}?`)) del.mutate(p.id)
+                          }}
+                          aria-label="Remove provider"
+                        >
+                          <Trash2 className="size-4 text-destructive" aria-hidden />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 )
               })
             )}

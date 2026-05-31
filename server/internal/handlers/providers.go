@@ -15,6 +15,7 @@ import (
 	"aether-server/internal/crypto"
 	"aether-server/internal/db"
 	"aether-server/internal/models"
+
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -108,13 +109,15 @@ func ListProviders(c *fiber.Ctx) error {
 
 	// Return sanitized list with config details
 	type ProviderResponse struct {
-		ID           uint      `json:"id"`
-		Provider     string    `json:"provider"`
-		ProviderType string    `json:"providerType"`
-		EndpointURL  string    `json:"endpointUrl"`
-		Bucket       string    `json:"bucket"`
-		Region       string    `json:"region"`
-		CreatedAt    time.Time `json:"createdAt"`
+		ID            uint       `json:"id"`
+		Provider      string     `json:"provider"`
+		ProviderType  string     `json:"providerType"`
+		EndpointURL   string     `json:"endpointUrl"`
+		Bucket        string     `json:"bucket"`
+		Region        string     `json:"region"`
+		Status        string     `json:"status"`
+		LastCheckedAt *time.Time `json:"lastCheckedAt"`
+		CreatedAt     time.Time  `json:"createdAt"`
 	}
 	res := []ProviderResponse{}
 	for _, p := range userProviders {
@@ -132,13 +135,15 @@ func ListProviders(c *fiber.Ctx) error {
 		}
 
 		res = append(res, ProviderResponse{
-			ID:           p.ID,
-			Provider:     p.Provider,
-			ProviderType: pType,
-			EndpointURL:  cfg["endpointUrl"],
-			Bucket:       cfg["bucket"],
-			Region:       cfg["region"],
-			CreatedAt:    p.CreatedAt,
+			ID:            p.ID,
+			Provider:      p.Provider,
+			ProviderType:  pType,
+			EndpointURL:   cfg["endpointUrl"],
+			Bucket:        cfg["bucket"],
+			Region:        cfg["region"],
+			Status:        p.Status,
+			LastCheckedAt: p.LastCheckedAt,
+			CreatedAt:     p.CreatedAt,
 		})
 	}
 
@@ -394,6 +399,11 @@ func DropboxCallback(c *fiber.Ctx) error {
 }
 
 // ProviderLatency returns the measured network latency from the Go backend to each linked provider.
+type ProviderLatencyResult struct {
+	LatencyMs int64  `json:"latencyMs"`
+	Status    string `json:"status"` // "healthy" | "unhealthy" | "unknown"
+}
+
 func ProviderLatency(c *fiber.Ctx) error {
 	userID := getUserID(c)
 	if userID == 0 {
@@ -407,7 +417,7 @@ func ProviderLatency(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{})
 	}
 
-	latencies := make(map[uint]int64)
+	results := make(map[uint]ProviderLatencyResult)
 
 	for _, p := range userProviders {
 		var url string
@@ -419,29 +429,87 @@ func ProviderLatency(c *fiber.Ctx) error {
 			url = "https://api.dropboxapi.com/2/users/get_current_account"
 			method = "POST"
 		} else {
-			// Skip unsupported or fast providers like local/AWS if we don't have a direct ping
+			results[p.ID] = ProviderLatencyResult{LatencyMs: 0, Status: "unknown"}
 			continue
 		}
 
-		// Perform a lightweight request (even if unauthorized, it measures TTFB)
 		req, err := http.NewRequest(method, url, nil)
 		if err != nil {
+			results[p.ID] = ProviderLatencyResult{LatencyMs: 0, Status: "unknown"}
 			continue
 		}
 
-		// Set a dummy authorization so the API gateway parses it rather than immediate edge block
 		req.Header.Set("Authorization", "Bearer invalid_token")
 
+		client := &http.Client{Timeout: 5 * time.Second}
 		start := time.Now()
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		elapsed := time.Since(start).Milliseconds()
-
 		if resp != nil && resp.Body != nil {
 			resp.Body.Close()
 		}
 
-		latencies[p.ID] = elapsed
+		results[p.ID] = ProviderLatencyResult{LatencyMs: elapsed, Status: determineStatus(elapsed, err)}
 	}
 
-	return c.JSON(latencies)
+	return c.JSON(results)
+}
+
+func determineStatus(elapsed int64, err error) string {
+	if err != nil {
+		return "unhealthy"
+	} else if elapsed < 800 {
+		return "healthy"
+	} else if elapsed < 2000 {
+		return "unknown"
+	}
+	return "unhealthy"
+}
+
+func CheckProviderHealth(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	providerID := c.Params("id")
+	var p models.UserProvider
+	if err := db.DB.Where("id = ? AND user_id = ?", providerID, userID).First(&p).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Provider not found"})
+	}
+
+	var url string
+	var method string = "GET"
+
+	if p.Provider == "GoogleDrive" {
+		url = "https://www.googleapis.com/drive/v3/about"
+	} else if p.Provider == "Dropbox" {
+		url = "https://api.dropboxapi.com/2/users/get_current_account"
+		method = "POST"
+	} else {
+		return c.JSON(fiber.Map{"status": "unknown", "latencyMs": 0})
+	}
+
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return c.JSON(fiber.Map{"status": "unhealthy", "latencyMs": 0})
+	}
+	req.Header.Set("Authorization", "Bearer invalid_token")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	start := time.Now()
+	resp, err := client.Do(req)
+	elapsed := time.Since(start).Milliseconds()
+	if resp != nil && resp.Body != nil {
+		resp.Body.Close()
+	}
+
+	status := determineStatus(elapsed, err)
+	now := time.Now()
+	db.DB.Model(&p).Updates(map[string]interface{}{
+		"status":          status,
+		"last_checked_at": now,
+	})
+
+	return c.JSON(fiber.Map{"status": status, "latencyMs": elapsed})
 }
