@@ -50,10 +50,6 @@ export async function derive_master_key_v2(password: string, salt: Uint8Array): 
       password: utf8(password),
       salt
     });
-    // Ensure it's a proper Uint8Array (not a plain object) after transfer
-    if (!(rawKey instanceof Uint8Array)) {
-      rawKey = new Uint8Array(Object.values(rawKey as any))
-    }
   }
   
   const h = await crypto.subtle.digest("SHA-256", rawKey)

@@ -6,7 +6,6 @@ import { toast } from "sonner"
 import { Folder, FileIcon, Search, MoreVertical, Download, Trash2, Maximize2, Play, Info, Image as ImageIcon, List, LayoutGrid } from "lucide-react"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { derive_master_key, fromB64 } from "@/lib/crypto/core"
-import { derive_master_key_v2 } from "@/lib/crypto/core-v2"
 import { StreamingEngine } from "@/components/browser/streaming-engine"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -189,12 +188,8 @@ export function FileList({
     } catch (e) {
       return
     }
-
-    // Use the correct key derivation function based on the volume engine
-    const saltBytes = fromB64(kdfSalt)
-    const { masterKey } = engine === "v2"
-      ? await derive_master_key_v2(pass, saltBytes)
-      : await derive_master_key(pass, saltBytes)
+    
+    const { masterKey } = await derive_master_key(pass, fromB64(kdfSalt))
     pass = ""
     setPlayingVideo({ inode, masterKey })
   }

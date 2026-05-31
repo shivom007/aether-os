@@ -3,12 +3,14 @@ package handlers
 import (
 	"fmt"
 	"mime/multipart"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"aether-server/internal/db"
 	"aether-server/internal/models"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 type AllocateShardRequest struct {
@@ -55,27 +57,31 @@ func AllocateShards(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "No storage providers linked. Please link a provider to upload files."})
 	}
 
-	var allocations []ShardAllocationResponse
-	
+	shards := make([]models.Shard, 0, 14)
+
 	for i := 0; i < 14; i++ {
 		p := userProviders[i%len(userProviders)]
 		providerName := fmt.Sprintf("UserProvider_%d", p.ID)
-		
-		shard := models.Shard{
+
+		shards = append(shards, models.Shard{
 			ChunkID:        chunk.ID,
 			ShardIndex:     i,
 			Provider:       providerName,
 			ProviderFileID: "pending", // To be updated once client uploads it
 			Status:         "pending", // Wait for upload
-		}
-		if result := db.DB.Create(&shard); result.Error != nil {
-			return c.Status(500).JSON(fiber.Map{"error": "Failed to allocate shard"})
-		}
+		})
+	}
 
+	if result := db.DB.Create(&shards); result.Error != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to allocate shards"})
+	}
+
+	allocations := make([]ShardAllocationResponse, 0, len(shards))
+	for _, shard := range shards {
 		allocations = append(allocations, ShardAllocationResponse{
 			ShardID:    shard.ID,
-			ShardIndex: i,
-			Provider:   providerName,
+			ShardIndex: shard.ShardIndex,
+			Provider:   shard.Provider,
 		})
 	}
 
@@ -120,12 +126,12 @@ func UploadShardHandler(c *fiber.Ctx) error {
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Seek to beginning before every attempt (vital for retries on a stream)
 		fileData.Seek(0, 0)
-		
+
 		providerFileID, uploadErr = provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
 		if uploadErr == nil {
 			break // Success
 		}
-		
+
 		// Check if it's a Dropbox rate limit error
 		if strings.Contains(uploadErr.Error(), "too_many_write_operations") {
 			if attempt < maxRetries {
@@ -137,7 +143,7 @@ func UploadShardHandler(c *fiber.Ctx) error {
 		// Other error or exhausted retries
 		break
 	}
-	
+
 	// Check if the shard was deleted from the DB (i.e. frontend aborted upload and called DeleteInode)
 	var checkShard models.Shard
 	if dbErr := db.DB.First(&checkShard, shard.ID).Error; dbErr != nil {
@@ -170,13 +176,22 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Failed to parse multipart form"})
 	}
 
-	type UploadResult struct {
-		Index int
-		Error error
+	type PendingUpload struct {
+		Index      int
+		ShardID    uint
+		FileHeader *multipart.FileHeader
 	}
-	
-	results := make(chan UploadResult, 14)
-	var expectedUploads int
+
+	type UploadResult struct {
+		Index          int
+		ShardID        uint
+		Provider       string
+		ProviderFileID string
+		Error          error
+	}
+
+	pendingUploads := make([]PendingUpload, 0, 14)
+	shardIDs := make([]uint, 0, 14)
 
 	// Semaphore to limit concurrent external provider requests to 8
 	// This prevents rate limits like Dropbox's "too_many_write_operations"
@@ -185,40 +200,70 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 	for i := 0; i < 14; i++ {
 		fileKey := fmt.Sprintf("shard_%d", i)
 		idKey := fmt.Sprintf("shardId_%d", i)
-		
+
 		shardIDStrs, okId := form.Value[idKey]
 		files, okFile := form.File[fileKey]
-		
+
 		if !okId || !okFile || len(shardIDStrs) == 0 || len(files) == 0 {
-			continue 
+			continue
 		}
-		
-		expectedUploads++
-		shardIDStr := shardIDStrs[0]
-		fileHeader := files[0]
-		
-		go func(index int, sID string, fh *multipart.FileHeader) {
+
+		shardID, err := strconv.ParseUint(shardIDStrs[0], 10, 64)
+		if err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid shard ID"})
+		}
+
+		pendingUploads = append(pendingUploads, PendingUpload{
+			Index:      i,
+			ShardID:    uint(shardID),
+			FileHeader: files[0],
+		})
+		shardIDs = append(shardIDs, uint(shardID))
+	}
+
+	if len(pendingUploads) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "No shard uploads found"})
+	}
+
+	var shards []models.Shard
+	if err := db.DB.Where("id IN ?", shardIDs).Find(&shards).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to load shard allocations"})
+	}
+
+	shardsByID := make(map[uint]models.Shard, len(shards))
+	providerNames := make([]string, 0, len(shards))
+	for _, shard := range shards {
+		shardsByID[shard.ID] = shard
+		providerNames = append(providerNames, shard.Provider)
+	}
+
+	for _, upload := range pendingUploads {
+		if _, exists := shardsByID[upload.ShardID]; !exists {
+			return c.Status(404).JSON(fiber.Map{"error": "Shard allocation not found"})
+		}
+	}
+
+	resolvedProviders, err := ResolveProviders(providerNames)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Unsupported provider"})
+	}
+
+	results := make(chan UploadResult, len(pendingUploads))
+
+	for _, upload := range pendingUploads {
+		shard := shardsByID[upload.ShardID]
+		resolved := resolvedProviders[shard.Provider]
+
+		go func(index int, shard models.Shard, resolved ResolvedProvider, fh *multipart.FileHeader) {
 			sem <- struct{}{}        // Acquire token
 			defer func() { <-sem }() // Release token
 
-			var shard models.Shard
-			if err := db.DB.First(&shard, sID).Error; err != nil {
-				results <- UploadResult{Index: index, Error: fmt.Errorf("shard not found")}
-				return
-			}
-
 			fileData, err := fh.Open()
 			if err != nil {
-				results <- UploadResult{Index: index, Error: err}
+				results <- UploadResult{Index: index, ShardID: shard.ID, Provider: shard.Provider, Error: err}
 				return
 			}
 			defer fileData.Close()
-
-			provider, cfg, err := ResolveProvider(shard.Provider)
-			if err != nil {
-				results <- UploadResult{Index: index, Error: fmt.Errorf("unsupported provider")}
-				return
-			}
 
 			var providerFileID string
 			var uploadErr error
@@ -227,12 +272,12 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 			for attempt := 1; attempt <= maxRetries; attempt++ {
 				// Seek to beginning before every attempt (vital for retries on a stream)
 				fileData.Seek(0, 0)
-				
-				providerFileID, uploadErr = provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, cfg)
+
+				providerFileID, uploadErr = resolved.Provider.UploadShard(fmt.Sprintf("%d", shard.ID), fileData, resolved.Config)
 				if uploadErr == nil {
 					break // Success
 				}
-				
+
 				// Check if it's a Dropbox rate limit error
 				if strings.Contains(uploadErr.Error(), "too_many_write_operations") {
 					if attempt < maxRetries {
@@ -245,38 +290,64 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 				break
 			}
 
-			// Check if the shard was deleted from the DB (i.e. frontend aborted upload)
-			var checkShard models.Shard
-			if dbErr := db.DB.First(&checkShard, shard.ID).Error; dbErr != nil {
-				if providerFileID != "" && providerFileID != "pending" {
-					provider.DeleteShard(providerFileID, cfg)
-				}
-				results <- UploadResult{Index: index, Error: fmt.Errorf("upload aborted")}
-				return
+			results <- UploadResult{
+				Index:          index,
+				ShardID:        shard.ID,
+				Provider:       shard.Provider,
+				ProviderFileID: providerFileID,
+				Error:          uploadErr,
 			}
-
-			if uploadErr != nil {
-				checkShard.Status = "missing"
-				db.DB.Save(&checkShard)
-				results <- UploadResult{Index: index, Error: uploadErr}
-				return
-			}
-
-			checkShard.ProviderFileID = providerFileID
-			checkShard.Status = "healthy"
-			db.DB.Save(&checkShard)
-
-			results <- UploadResult{Index: index, Error: nil}
-		}(i, shardIDStr, fileHeader)
+		}(upload.Index, shard, resolved, upload.FileHeader)
 	}
-	
+
 	// Wait for all goroutines to finish
 	var hasError bool
-	for i := 0; i < expectedUploads; i++ {
+	uploadResults := make([]UploadResult, 0, len(pendingUploads))
+	for i := 0; i < len(pendingUploads); i++ {
 		res := <-results
+		uploadResults = append(uploadResults, res)
 		if res.Error != nil {
 			fmt.Printf("Batch upload error on shard index %d: %v\n", res.Index, res.Error)
 			hasError = true
+		}
+	}
+
+	var existingShards []models.Shard
+	if err := db.DB.Select("id").Where("id IN ?", shardIDs).Find(&existingShards).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to verify shard uploads"})
+	}
+
+	existingShardIDs := make(map[uint]bool, len(existingShards))
+	for _, shard := range existingShards {
+		existingShardIDs[shard.ID] = true
+	}
+
+	successfulUploads := make(map[uint]string)
+	var failedShardIDs []uint
+	for _, res := range uploadResults {
+		if !existingShardIDs[res.ShardID] {
+			if res.ProviderFileID != "" && res.ProviderFileID != "pending" {
+				if resolved, ok := resolvedProviders[res.Provider]; ok {
+					resolved.Provider.DeleteShard(res.ProviderFileID, resolved.Config)
+				}
+			}
+			hasError = true
+			continue
+		}
+
+		if res.Error != nil {
+			failedShardIDs = append(failedShardIDs, res.ShardID)
+			continue
+		}
+		successfulUploads[res.ShardID] = res.ProviderFileID
+	}
+
+	if len(failedShardIDs) > 0 {
+		db.DB.Model(&models.Shard{}).Where("id IN ?", failedShardIDs).Update("status", "missing")
+	}
+	if len(successfulUploads) > 0 {
+		if err := batchMarkShardsHealthy(successfulUploads); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to update shard statuses"})
 		}
 	}
 
@@ -289,7 +360,7 @@ func UploadChunkBatchHandler(c *fiber.Ctx) error {
 
 func DownloadShardHandler(c *fiber.Ctx) error {
 	shardIDStr := c.Params("id")
-	
+
 	var shard models.Shard
 	if err := db.DB.First(&shard, shardIDStr).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Shard not found"})
@@ -308,4 +379,24 @@ func DownloadShardHandler(c *fiber.Ctx) error {
 
 	c.Set("Content-Type", "application/octet-stream")
 	return c.SendStream(reader)
+}
+
+func batchMarkShardsHealthy(providerFileIDs map[uint]string) error {
+	shardIDs := make([]uint, 0, len(providerFileIDs))
+	caseSQL := "CASE id "
+	caseArgs := make([]interface{}, 0, len(providerFileIDs)*2)
+
+	for shardID, providerFileID := range providerFileIDs {
+		shardIDs = append(shardIDs, shardID)
+		caseSQL += "WHEN ? THEN ? "
+		caseArgs = append(caseArgs, shardID, providerFileID)
+	}
+	caseSQL += "END"
+
+	return db.DB.Model(&models.Shard{}).
+		Where("id IN ?", shardIDs).
+		Updates(map[string]interface{}{
+			"provider_file_id": gorm.Expr(caseSQL, caseArgs...),
+			"status":           "healthy",
+		}).Error
 }

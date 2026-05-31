@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"aether-server/internal/db"
+	"aether-server/internal/filestore"
+	"aether-server/internal/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"aether-server/internal/db"
-	"aether-server/internal/models"
-	"aether-server/internal/filestore"
+	"gorm.io/gorm"
 )
 
 type CreateFolderRequest struct {
@@ -197,7 +198,7 @@ func RegisterFile(c *fiber.Ctx) error {
 	db.DB.Create(&fileVersion)
 
 	return c.Status(201).JSON(fiber.Map{
-		"file": file,
+		"file":      file,
 		"versionId": fileVersion.ID,
 	})
 }
@@ -241,38 +242,68 @@ func DeleteFile(c *fiber.Ctx) error {
 		return c.Status(404).JSON(fiber.Map{"error": "File not found"})
 	}
 
-	// Physically delete shards from providers
-
-	// Delete DB records synchronously to update UI instantly
+	var versionIDs []uint
+	var chunkIDs []uint
+	var shardIDs []uint
+	var providerNames []string
 	for _, version := range file.Versions {
+		versionIDs = append(versionIDs, version.ID)
 		for _, chunk := range version.Chunks {
+			chunkIDs = append(chunkIDs, chunk.ID)
 			for _, shard := range chunk.Shards {
-				db.DB.Delete(&shard)
+				shardIDs = append(shardIDs, shard.ID)
+				providerNames = append(providerNames, shard.Provider)
 			}
-			db.DB.Delete(&chunk)
 		}
-		db.DB.Delete(&version)
 	}
-	db.DB.Delete(&file)
+
+	// Delete DB records synchronously to update UI instantly.
+	if err := db.DB.Transaction(func(tx *gorm.DB) error {
+		if len(shardIDs) > 0 {
+			if err := tx.Delete(&models.Shard{}, shardIDs).Error; err != nil {
+				return err
+			}
+		}
+		if len(chunkIDs) > 0 {
+			if err := tx.Delete(&models.Chunk{}, chunkIDs).Error; err != nil {
+				return err
+			}
+		}
+		if len(versionIDs) > 0 {
+			if err := tx.Delete(&models.FileVersion{}, versionIDs).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Delete(&file).Error
+	}); err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to delete file"})
+	}
 
 	// Run physical provider deletion in a background goroutine
-	go func(file models.File) {
+	go func(file models.File, providerNames []string) {
+		resolvedProviders, err := ResolveProviders(providerNames)
+		if err != nil {
+			fmt.Println("ResolveProviders failed during file cleanup:", err)
+		}
+
 		for _, version := range file.Versions {
 			for _, chunk := range version.Chunks {
 				for _, shard := range chunk.Shards {
-					if provider, cfg, err := ResolveProvider(shard.Provider); err == nil {
-						// Attempt physical delete (ignore errors)
-						provider.DeleteShard(shard.ProviderFileID, cfg)
+					resolved, ok := resolvedProviders[shard.Provider]
+					if !ok {
+						continue
 					}
+					// Attempt physical delete (ignore errors)
+					resolved.Provider.DeleteShard(shard.ProviderFileID, resolved.Config)
 				}
 			}
 		}
-		
+
 		// Delete S3 thumbnail if it exists
 		if strings.HasPrefix(file.Thumbnail, "thumbnails/") {
 			filestore.DeleteThumbnail(context.Background(), file.Thumbnail)
 		}
-	}(file)
+	}(file, providerNames)
 
 	return c.JSON(fiber.Map{"message": "File deleted successfully"})
 }

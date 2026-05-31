@@ -66,15 +66,12 @@ self.onmessage = async (e: MessageEvent) => {
       const { password, salt } = payload
       
       const rawKey = derive_master_key_argon2(password, salt)
-      // Copy into a fresh Uint8Array to ensure it's a proper transferable buffer
-      // (WASM memory can sometimes return views that aren't directly transferable)
-      const keyCopy = new Uint8Array(rawKey)
       
       self.postMessage({
         id,
         success: true,
-        data: keyCopy
-      }, { transfer: [keyCopy.buffer] })
+        data: rawKey
+      })
     }
   } catch (error) {
     self.postMessage({

@@ -11,6 +11,7 @@ import { derive_chunk_key_v2, derive_master_key_v2, encrypt_chunk_v2, fromB64 } 
 import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
+import type { ChunkAllocationResponse } from "@/lib/shards"
 import type { Inode } from "@/lib/types"
 import { useUploadStore } from "@/lib/store/upload-store"
 
@@ -29,7 +30,8 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
     file: File,
     fileId: string,
     abort: AbortController,
-    masterKey: CryptoKey
+    masterKey: CryptoKey,
+    saltB64: string
   ) => {
     updateFile(fileId, { status: "encrypting" })
 
@@ -67,7 +69,7 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
         const end = Math.min(start + dynamicChunkSize, file.size)
         const slice = new Uint8Array(await file.slice(start, end).arrayBuffer())
         // V2 Crypto Engine
-        const saltBytes = fromB64(kdfSalt)
+        const saltBytes = fromB64(saltB64)
         const { chunkKey, nonce } = await derive_chunk_key_v2(masterKey, saltBytes, volumeId, i)
         
         const aadString = `aether:v2:${volumeId}:${i}:${totalChunks}`
@@ -83,7 +85,7 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
 
         const encoded = await encodeShards(body)
 
-        const { allocation } = await api<{ jobId: string; status: string; allocation: any }>(`/api/jobs/chunk`, {
+        const { allocation } = await api<ChunkAllocationResponse>(`/api/jobs/chunk`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -181,7 +183,7 @@ export function UploadZoneBatch({ volumeId, kdfSalt, onUploadComplete }: UploadZ
       
       for (let i = 0; i < validFiles.length; i++) {
         const fileData = newFiles[i]
-        processFile(validFiles[i], fileData.id, fileData.abort, masterKey)
+        processFile(validFiles[i], fileData.id, fileData.abort, masterKey, kdfSalt)
       }
     },
     [volumeId, kdfSalt, requestPassphrase, addFiles],

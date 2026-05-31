@@ -11,6 +11,7 @@ import { derive_chunk_key, derive_master_key, encrypt_chunk, fromB64 } from "@/l
 import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
+import type { ChunkAllocationResponse } from "@/lib/shards"
 import type { Inode } from "@/lib/types"
 
 export interface UploadZoneProps {
@@ -95,7 +96,7 @@ export function UploadZone({ volumeId, kdfSalt, onUploadComplete }: UploadZonePr
           const encoded = await encodeShards(body)
 
           // 2. Ask Next.js/Go backend to allocate 14 shard slots for us
-          const { allocation } = await api<{ jobId: string; status: string; allocation: any }>(`/api/jobs/chunk`, {
+          const { allocation } = await api<ChunkAllocationResponse>(`/api/jobs/chunk`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

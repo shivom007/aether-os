@@ -12,6 +12,7 @@ import { derive_chunk_key_v2, derive_master_key_v2, encrypt_chunk_v2 } from "@/l
 import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
+import type { ChunkAllocationResponse } from "@/lib/shards"
 import type { Inode } from "@/lib/types"
 import { useUploadStore } from "@/lib/store/upload-store"
 
@@ -99,7 +100,7 @@ export function UploadZoneGlobal({ volumeId, kdfSalt, engine = "v1", onUploadCom
         const encoded = await encodeShards(body)
 
         // SHARD ALLOCATION
-        const { allocation } = await api<{ jobId: string; status: string; allocation: any }>(`/api/jobs/chunk`, {
+        const { allocation } = await api<ChunkAllocationResponse>(`/api/jobs/chunk`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
