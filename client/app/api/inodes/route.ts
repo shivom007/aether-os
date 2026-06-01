@@ -15,6 +15,7 @@ const Body = z.object({
   size_bytes: z.number().int().min(0).default(0),
   mime_type: z.string().max(255).nullable().optional(),
   thumbnail: z.string().optional(),
+  fingerprint: z.string().optional(),
 })
 
 export async function POST(req: NextRequest) {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   const token = await getGoToken()
   const parsed = Body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return fail(parsed.error.issues[0]?.message || "Invalid body", 400)
-  const { volume_id, parent_id, name, kind, size_bytes, mime_type, thumbnail } = parsed.data
+  const { volume_id, parent_id, name, kind, size_bytes, mime_type, thumbnail, fingerprint } = parsed.data
 
   try {
     if (kind === "dir") {
@@ -52,12 +53,12 @@ export async function POST(req: NextRequest) {
 
     // Register file in Go backend
     const parentId = toGoNumericID(parent_id)
-    const result = await goFetch<{ file: { id: number; name: string; size: number; mimeType: string; thumbnail?: string; volumeId: string; folderId: number | null; createdAt: string; updatedAt: string }; versionId: number }>(
+    const result = await goFetch<{ file: { id: number; name: string; size: number; mimeType: string; thumbnail?: string; volumeId: string; folderId: number | null; createdAt: string; updatedAt: string }; versionId: number; completedChunks?: number[] }>(
       "/fs/file",
       {
         method: "POST",
         token,
-        body: JSON.stringify({ name, size: size_bytes, mimeType: mime_type || "application/octet-stream", folderId: parentId, volumeId: volume_id, thumbnail }),
+        body: JSON.stringify({ name, size: size_bytes, mimeType: mime_type || "application/octet-stream", folderId: parentId, volumeId: volume_id, thumbnail, fingerprint }),
       }
     )
 
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
       updated_at: result.file.updatedAt || result.file.createdAt,
     }
 
-    return ok({ ...inode, versionId: result.versionId })
+    return ok({ ...inode, versionId: result.versionId, completedChunks: result.completedChunks || [] })
   } catch (err) {
     return fail((err as Error).message, 500)
   }

@@ -1,31 +1,75 @@
+import { LegalPage } from "@/app/_components/marketing-page"
+
+export const metadata = {
+  title: "Terms | Aether-OS",
+  description: "Aether-OS service terms for encrypted cloud aggregation and connected provider use.",
+}
+
 export default function TermsOfService() {
   return (
-    <div className="max-w-4xl mx-auto p-8 prose prose-invert prose-blue">
-      <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
-      <p className="mb-4">Last updated: {new Date().toLocaleDateString()}</p>
-      
-      <h2 className="text-2xl font-semibold mt-8 mb-4">1. Acceptance of Terms</h2>
-      <p className="mb-4">
-        By accessing or using Project Aether, you agree to be bound by these Terms of Service. If you disagree with any part of the terms, then you may not access the service.
-      </p>
-
-      <h2 className="text-2xl font-semibold mt-8 mb-4">2. Description of Service</h2>
-      <p className="mb-4">
-        Project Aether is a unified cloud storage dashboard that allows users to connect their own third-party storage providers (like Google Drive, Dropbox, and AWS S3) to pool storage capacity using erasure coding.
-      </p>
-
-      <h2 className="text-2xl font-semibold mt-8 mb-4">3. User Responsibilities</h2>
-      <p className="mb-4">
-        You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account. You also agree not to use the service for any illegal or unauthorized purpose.
-      </p>
-      <p className="mb-4">
-        You must comply with the Terms of Service of any third-party storage provider you link to Project Aether. Aether is not responsible for any bans or data loss incurred on those third-party platforms.
-      </p>
-
-      <h2 className="text-2xl font-semibold mt-8 mb-4">4. "As Is" Warranty</h2>
-      <p className="mb-4">
-        The service is provided on an "AS IS" and "AS AVAILABLE" basis. Aether makes no warranties, expressed or implied, and hereby disclaims all warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property.
-      </p>
-    </div>
+    <LegalPage
+      title="Terms of Service"
+      subtitle="These terms describe the boundaries of using Aether as a private storage control layer across providers you connect."
+      updated="June 1, 2026"
+      sections={[
+        {
+          title: "Acceptance",
+          body: (
+            <p>
+              By accessing or using Aether-OS, you agree to these terms. If you do not agree, you should not access the service or connect provider accounts.
+            </p>
+          ),
+        },
+        {
+          title: "Service description",
+          body: (
+            <>
+              <p>Aether-OS is a cloud storage control layer for encrypted volumes, provider connections, shard placement, upload processing, and recovery workflows.</p>
+              <p>The service is designed to coordinate encrypted data across third-party storage providers that you authorize or configure.</p>
+            </>
+          ),
+        },
+        {
+          title: "Your responsibilities",
+          body: (
+            <>
+              <p>You are responsible for maintaining your account, password, volume passphrases, provider accounts, and provider credentials.</p>
+              <p>You must comply with the terms and policies of any third-party provider you connect. Provider account limits, suspensions, outages, or deletions may affect data availability.</p>
+              <p>You may not use Aether for illegal activity, abusive storage behavior, credential misuse, or attempts to compromise the service or connected providers.</p>
+            </>
+          ),
+        },
+        {
+          title: "Data and recovery",
+          body: (
+            <>
+              <p>Aether coordinates encrypted chunks and shards. Recovery depends on sufficient available shards and the user-controlled material required to decrypt files.</p>
+              <p>If you lose the required passphrase or recovery material, Aether may be unable to restore plaintext file content.</p>
+            </>
+          ),
+        },
+        {
+          title: "Availability and warranty",
+          body: (
+            <>
+              <p>The service is provided on an "AS IS" and "AS AVAILABLE" basis. Storage providers, network conditions, worker queues, and account limits may affect service behavior.</p>
+              <p>Aether disclaims warranties to the maximum extent permitted by law, including implied warranties of merchantability, fitness for a particular purpose, and non-infringement.</p>
+            </>
+          ),
+        },
+        {
+          title: "Contact",
+          body: (
+            <p>
+              Questions about these terms can be sent to{" "}
+              <a href="mailto:hello@aether-os.dev" className="text-emerald-300 hover:text-emerald-200">
+                hello@aether-os.dev
+              </a>
+              .
+            </p>
+          ),
+        },
+      ]}
+    />
   )
 }

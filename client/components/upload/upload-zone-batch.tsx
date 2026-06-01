@@ -14,6 +14,7 @@ import { encodeShards } from "@/lib/erasure"
 import type { ChunkAllocationResponse } from "@/lib/shards"
 import type { Inode } from "@/lib/types"
 import { useUploadStore } from "@/lib/store/upload-store"
+import { globalUploadQueue } from "@/lib/utils/async-queue"
 
 export interface UploadZoneProps {
   volumeId: string
@@ -38,9 +39,13 @@ export function UploadZoneBatch({ volumeId, parentId = null, kdfSalt, onUploadCo
 
     let inodeId: string | undefined;
     try {
+      const fingerprintStr = `${volumeId}:${file.name}:${file.size}:${file.lastModified}`;
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprintStr));
+      const fingerprint = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
       const thumbnail_b64 = await generateEncryptedThumbnail(file, masterKey, volumeId)
       
-      const inode = await api<Inode>("/api/inodes", {
+      const inode = await api<Inode & { completedChunks?: number[] }>("/api/inodes", {
         method: "POST",
           body: JSON.stringify({
             volume_id: volumeId,
@@ -50,6 +55,7 @@ export function UploadZoneBatch({ volumeId, parentId = null, kdfSalt, onUploadCo
           size_bytes: file.size,
           mime_type: file.type,
           thumbnail: thumbnail_b64 || undefined,
+          fingerprint: fingerprint,
         }),
         signal: abort.signal,
       })
@@ -67,6 +73,12 @@ export function UploadZoneBatch({ volumeId, parentId = null, kdfSalt, onUploadCo
       
       for (let i = 0; i < totalChunks; i++) {
         if (abort.signal.aborted) throw new Error("cancelled")
+        if (inode.completedChunks?.includes(i)) {
+          globalCompletedShards += 14;
+          updateFile(fileId, { uploaded: globalCompletedShards });
+          continue; // Skip this chunk, it's already uploaded!
+        }
+
         const start = i * dynamicChunkSize
         const end = Math.min(start + dynamicChunkSize, file.size)
         const slice = new Uint8Array(await file.slice(start, end).arrayBuffer())
@@ -185,7 +197,10 @@ export function UploadZoneBatch({ volumeId, parentId = null, kdfSalt, onUploadCo
       
       for (let i = 0; i < validFiles.length; i++) {
         const fileData = newFiles[i]
-        processFile(validFiles[i], fileData.id, fileData.abort, masterKey, kdfSalt)
+        // DO NOT await here! Let them run in the background unattached to React's lifecycle!
+        globalUploadQueue.add(() => 
+          processFile(validFiles[i], fileData.id, fileData.abort, masterKey, kdfSalt)
+        ).catch(console.error)
       }
     },
     [volumeId, parentId, kdfSalt, requestPassphrase, addFiles],

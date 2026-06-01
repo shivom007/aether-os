@@ -52,6 +52,11 @@ export interface ProviderCredential {
   created_at: string
 }
 
+export interface ProviderLatencyResult {
+  latencyMs?: number
+  status: ProviderStatus
+}
+
 export interface PhysicalChunk {
   id: string
   inode_id: string

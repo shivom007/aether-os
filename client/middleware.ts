@@ -34,11 +34,18 @@ async function makeSecret() {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  if (isPublic(pathname)) return NextResponse.next()
-
   const accessToken = req.cookies.get("aether_access")?.value
   const refreshToken = req.cookies.get("aether_refresh")?.value
   const goToken = req.cookies.get("aether_go_token")?.value
+
+  // Prevent authenticated users from visiting login/signup pages
+  if (pathname === "/login" || pathname === "/signup") {
+    if (refreshToken || accessToken) {
+      return NextResponse.redirect(new URL("/dashboard", req.url))
+    }
+  }
+
+  if (isPublic(pathname)) return NextResponse.next()
 
   const secret = await makeSecret().catch(() => null)
   if (!secret) return NextResponse.next() // misconfigured — let through

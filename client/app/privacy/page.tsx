@@ -1,33 +1,68 @@
+import { LegalPage } from "@/app/_components/marketing-page"
+
+export const metadata = {
+  title: "Privacy | Aether-OS",
+  description: "How Aether-OS handles account, provider, metadata, and encrypted file information.",
+}
+
 export default function PrivacyPolicy() {
   return (
-    <div className="max-w-4xl mx-auto p-8 prose prose-invert prose-blue">
-      <h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
-      <p className="mb-4">Last updated: {new Date().toLocaleDateString()}</p>
-      
-      <h2 className="text-2xl font-semibold mt-8 mb-4">1. Information We Collect</h2>
-      <p className="mb-4">
-        When you use Project Aether, we collect basic information needed to provide the service. This includes:
-      </p>
-      <ul className="list-disc pl-6 mb-6">
-        <li>Account information (email address, password)</li>
-        <li>Authentication tokens for linked providers (Google Drive, Dropbox, AWS)</li>
-        <li>Metadata about the files you store (filenames, sizes, chunk distributions)</li>
-      </ul>
-
-      <h2 className="text-2xl font-semibold mt-8 mb-4">2. How We Use Your Information</h2>
-      <p className="mb-4">
-        We use this information exclusively to provide the Project Aether unified storage service. The file content itself is encrypted client-side or split into erasure-coded shards before being uploaded to your linked providers. Aether's central servers only store the metadata needed to reassemble those files.
-      </p>
-
-      <h2 className="text-2xl font-semibold mt-8 mb-4">3. Data Security</h2>
-      <p className="mb-4">
-        All API communication is secured via HTTPS. Your provider OAuth tokens are stored securely in our database and are only used on your behalf to process your direct upload/download requests.
-      </p>
-
-      <h2 className="text-2xl font-semibold mt-8 mb-4">4. Contact Us</h2>
-      <p className="mb-4">
-        If you have any questions about this Privacy Policy, please contact the repository maintainer.
-      </p>
-    </div>
+    <LegalPage
+      title="Privacy Policy"
+      subtitle="Aether is designed to coordinate encrypted storage while minimizing what the service needs to know about your files."
+      updated="June 1, 2026"
+      sections={[
+        {
+          title: "Information we collect",
+          body: (
+            <>
+              <p>We collect the account information needed to authenticate you, such as email address and password credentials.</p>
+              <p>When you connect storage providers, Aether stores the provider metadata and encrypted credentials needed to perform the actions you request.</p>
+              <p>We also store operational metadata such as file names, sizes, volume records, shard placement, provider status, worker state, and reconstruction data.</p>
+            </>
+          ),
+        },
+        {
+          title: "File content and encryption",
+          body: (
+            <>
+              <p>File content is intended to be encrypted client-side before storage operations place data with linked providers.</p>
+              <p>The backend coordinates encrypted chunks, erasure-coded shards, and metadata needed for upload, download, and recovery workflows.</p>
+              <p>Aether cannot recover a lost passphrase or decrypt user-held encrypted data without the required user-controlled material.</p>
+            </>
+          ),
+        },
+        {
+          title: "How information is used",
+          body: (
+            <>
+              <p>We use account and operational data to provide authentication, provider connections, volume browsing, upload processing, shard placement, recovery, observability, and support.</p>
+              <p>Provider credentials are used only to perform storage actions on your behalf, such as uploading, reading, deleting, or checking health for provider-hosted shard objects.</p>
+            </>
+          ),
+        },
+        {
+          title: "Security practices",
+          body: (
+            <>
+              <p>Backend deployments require explicit authentication and provider encryption secrets. Provider credentials are protected at rest using a dedicated encryption key.</p>
+              <p>All production communication should be served over HTTPS. Operational access should be limited to people and systems that need it to keep the service running.</p>
+            </>
+          ),
+        },
+        {
+          title: "Contact",
+          body: (
+            <p>
+              Questions about privacy or data handling can be sent to{" "}
+              <a href="mailto:hello@aether-os.dev" className="text-emerald-300 hover:text-emerald-200">
+                hello@aether-os.dev
+              </a>
+              .
+            </p>
+          ),
+        },
+      ]}
+    />
   )
 }

@@ -24,8 +24,9 @@ type FileMetadataRequest struct {
 	FolderID  *uint  `json:"folderId"`
 	VolumeID  string `json:"volumeId"`
 	Size      int64  `json:"size"`
-	MimeType  string `json:"mimeType"`
-	Thumbnail string `json:"thumbnail,omitempty"`
+	MimeType    string `json:"mimeType"`
+	Thumbnail   string `json:"thumbnail,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // Get userID from JWT middleware context
@@ -223,14 +224,40 @@ func RegisterFile(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "File size exceeds the absolute server limit of 1GB"})
 	}
 
+	// RESUMABLE UPLOADS: Check if file already exists with this fingerprint
+	if req.Fingerprint != "" {
+		var existingFile models.File
+		if err := db.DB.Preload("Versions.Chunks.Shards").
+			Where("fingerprint = ? AND user_id = ? AND volume_id = ?", req.Fingerprint, userID, req.VolumeID).
+			First(&existingFile).Error; err == nil {
+			
+			completedChunks := make([]int, 0)
+			if len(existingFile.Versions) > 0 {
+				latestVer := existingFile.Versions[len(existingFile.Versions)-1]
+				for _, chunk := range latestVer.Chunks {
+					if len(chunk.Shards) == 14 {
+						completedChunks = append(completedChunks, chunk.ChunkIndex)
+					}
+				}
+				
+				return c.Status(200).JSON(fiber.Map{
+					"file":            existingFile,
+					"versionId":       latestVer.ID,
+					"completedChunks": completedChunks,
+				})
+			}
+		}
+	}
+
 	file := models.File{
-		Name:      req.Name,
-		FolderID:  req.FolderID,
-		VolumeID:  req.VolumeID,
-		Size:      req.Size,
-		MimeType:  req.MimeType,
-		Thumbnail: "", // We will set this if S3 upload succeeds
-		UserID:    userID,
+		Name:        req.Name,
+		FolderID:    req.FolderID,
+		VolumeID:    req.VolumeID,
+		Size:        req.Size,
+		MimeType:    req.MimeType,
+		Thumbnail:   "",
+		Fingerprint: req.Fingerprint,
+		UserID:      userID,
 	}
 
 	if result := db.DB.Create(&file); result.Error != nil {
@@ -271,8 +298,9 @@ func RegisterFile(c *fiber.Ctx) error {
 	db.DB.Create(&fileVersion)
 
 	return c.Status(201).JSON(fiber.Map{
-		"file":      file,
-		"versionId": fileVersion.ID,
+		"file":            file,
+		"versionId":       fileVersion.ID,
+		"completedChunks": []int{},
 	})
 }
 

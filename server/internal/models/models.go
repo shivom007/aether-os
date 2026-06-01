@@ -49,10 +49,11 @@ type File struct {
 	FolderID  *uint     `gorm:"index" json:"folderId"`
 	Name      string    `gorm:"not null" json:"name"`
 	Size      int64     `gorm:"not null" json:"size"`
-	MimeType  string    `json:"mimeType"`
-	Thumbnail string    `json:"thumbnail,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	MimeType    string    `json:"mimeType"`
+	Thumbnail   string    `json:"thumbnail,omitempty"`
+	Fingerprint string    `json:"fingerprint,omitempty"` // Used for resumable uploads
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 
 	Versions []FileVersion `gorm:"foreignKey:FileID" json:"versions,omitempty"`
 }
