@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { jwtVerify, SignJWT } from "jose"
-import { getToken } from "next-auth/jwt"
 
 const PUBLIC_PATHS = [
   "/",
   "/login",
   "/signup",
   "/api/auth",
-  "/api/health",
+  "/api/health", // Prevents Railway Healthcheck failures
   "/metrics",
   "/_next",
   "/favicon",
@@ -30,7 +29,7 @@ function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => p !== "/" && (pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p)))
 }
 
-const ACCESS_TTL_SEC = 24 * 60 * 60 // 24 hours — must match lib/auth.ts
+const ACCESS_TTL_SEC = 24 * 60 * 60 // 24 hours
 
 async function makeSecret() {
   const s = process.env.AUTH_JWT_SECRET
@@ -63,21 +62,6 @@ export async function middleware(req: NextRequest) {
       } catch {
         // Expired/invalid access token, fall through to refresh
       }
-    }
-
-    // Try to verify NextAuth token
-    try {
-      const isSecure = process.env.NEXTAUTH_URL?.startsWith("https://") || req.nextUrl.protocol === "https:"
-      const nextAuthToken = await getToken({ 
-        req, 
-        secret: process.env.NEXTAUTH_SECRET || "default_dev_secret",
-        secureCookie: isSecure
-      })
-      if (nextAuthToken) {
-        return NextResponse.redirect(new URL("/dashboard", req.url))
-      }
-    } catch {
-      // ignore
     }
 
     // Try silent refresh
@@ -118,7 +102,7 @@ export async function middleware(req: NextRequest) {
       }
     }
 
-    // If cookies are present but invalid/expired, clear them to prevent redirect loops
+    // BREAK INFINITE LOOP: If cookies are present but invalid/expired, clear them!
     if (accessToken || refreshToken || goToken) {
       const response = NextResponse.next()
       response.cookies.delete("aether_access")
@@ -140,21 +124,6 @@ export async function middleware(req: NextRequest) {
     } catch {
       // Expired or invalid — fall through to refresh
     }
-  }
-
-  // ✅ 1b. NextAuth session is valid — let through immediately
-  try {
-    const isSecure = process.env.NEXTAUTH_URL?.startsWith("https://") || req.nextUrl.protocol === "https:"
-    const nextAuthToken = await getToken({ 
-      req, 
-      secret: process.env.NEXTAUTH_SECRET || "default_dev_secret",
-      secureCookie: isSecure
-    })
-    if (nextAuthToken) {
-      return NextResponse.next()
-    }
-  } catch (err) {
-    // Ignore NextAuth token errors
   }
 
   // 🔄 2. Access token expired — try to silently re-issue using expired token's identity
@@ -207,7 +176,6 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(url)
 }
 
-// Ensure static assets and system paths are skipped by the middleware entirely
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.*|apple-icon.*).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.*|apple-icon.*).*)" ],
 }
