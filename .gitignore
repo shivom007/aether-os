@@ -1,56 +1,72 @@
 # Node / React / Next.js
-node_modules/
-.next/
-.vercel/
-client/out/
-client/build/
-client/.env*
+**/node_modules/
+**/.next/
+**/.vercel/
+**/.wrangler/
+**/.open-next/
+**/.pnpm-store/
+apps/web/out/
+apps/web/build/
+apps/web/.env*
+apps/web/tsconfig.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
 # Go / Backend
-server/aether.db
-server/aether.db-journal
-server/storage.db
-server/storage.db-journal
-server/api.exe
-server/main.exe
-server/cmd/api/api.exe
-server/railway_logs.txt
-server/railway_logs_new.txt
-server/railway_api_logs.txt
-server/temp.env
-server/.env
-server/test_shard.bin
+services/api/aether.db
+services/api/aether.db-journal
+services/api/storage.db
+services/api/storage.db-journal
+services/api/storage/
+services/api/api
+services/api/api.exe
+services/api/worker
+services/api/worker.exe
+services/api/main.exe
+services/api/server.exe
+services/api/cmd/api/api.exe
+services/api/railway_logs*.txt
+services/api/temp.env
+services/api/.env
+services/api/prod_env.txt
+services/api/test_shard.bin
+
+# Android / Gradle
+apps/android/.gradle/
+apps/android/.idea/
+apps/android/.kotlin/
+apps/android/build/
+apps/android/local.properties
+apps/android/**/build/
+
+# Rust / WASM
+**/target/
+
+# Local secrets, exports, and logs
+.env*
+!.env.example
+key.txt
+temp.env
+env_backup*.txt
+logcat.txt
+*.db
+*.db-journal
+
+# Local scratch / archives
+temp_railway/
+temp_pull_aetheros/
+dashboard.zip
+simulate_upload.bin
+tools/migrations/temp_migration/
 
 # OS / Misc
 .DS_Store
 Thumbs.db
 *.zip
 *.bin
-
-# Temp Dirs
-temp_railway/
-dashboard.zip
-simulate_upload.bin
-.wrangler/
-client/.open-next/
-client/.pnpm-store/
-client-old/
-
-# Storage shards (never push user data)
-server/storage/
-
-# Build caches
-client/tsconfig.tsbuildinfo
-
-# Scripts and Databases
-aether.db
-aether.db-journal
+*.exe
 *.ps1
 test*.js
 test*.ts
-
-.vercel

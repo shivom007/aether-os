@@ -1,0 +1,6 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "go build -o api ./cmd/api && go build -o worker ./cmd/worker"
+
+[deploy]
+startCommand = "./api"

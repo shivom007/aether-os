@@ -1,0 +1,791 @@
+openapi: 3.1.0
+info:
+  title: Aether Go API
+  version: 0.1.0
+  description: Current contract for the Go metadata API. Protected routes accept Android session JWTs or short-lived web BFF assertions.
+servers:
+  - url: http://localhost:8080/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      summary: API health check
+      responses:
+        "200":
+          description: Healthy response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /auth/register:
+    post:
+      security: []
+      summary: Register a user auth hash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+  /auth/verify:
+    post:
+      security: []
+      summary: Verify credentials for a web NextAuth sign-in without issuing a Go session JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Verified Go user identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+  /auth/login:
+    post:
+      security: []
+      summary: Exchange a user auth hash for an Android Go session JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /auth/refresh:
+    post:
+      summary: Refresh an Android Go session JWT using a still-valid session JWT
+      responses:
+        "200":
+          description: Refreshed token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /auth/logout:
+    post:
+      summary: Revoke Android Go session JWTs for the authenticated user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+  /volumes:
+    get:
+      summary: List volumes owned by the authenticated user
+      responses:
+        "200":
+          description: Volume list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Volume"
+    post:
+      summary: Create a volume
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVolumeRequest"
+      responses:
+        "201":
+          description: Created volume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Volume"
+  /volumes/{id}:
+    patch:
+      summary: Update a volume
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVolumeRequest"
+      responses:
+        "200":
+          description: Updated volume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Volume"
+    delete:
+      summary: Delete an empty volume
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Deleted volume
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteVolumeResponse"
+  /fs:
+    get:
+      summary: List files and folders
+      parameters:
+        - name: volumeId
+          in: query
+          schema:
+            type: string
+        - name: parentId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Directory listing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListFilesResponse"
+  /fs/folder:
+    post:
+      summary: Create a folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFolderRequest"
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+  /fs/folder/{id}:
+    delete:
+      summary: Delete an empty folder
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Folder deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+  /fs/file:
+    post:
+      summary: Register file metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFileRequest"
+      responses:
+        "200":
+          description: Existing resumable file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateFileResponse"
+        "201":
+          description: Registered file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateFileResponse"
+  /fs/file/{id}:
+    get:
+      summary: Get file details with versions, chunks, and shards
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: File details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+    delete:
+      summary: Delete a file
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+  /providers:
+    get:
+      summary: List linked providers
+      responses:
+        "200":
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Provider"
+  /providers/aws:
+    post:
+      summary: Link S3-compatible provider credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkProviderRequest"
+      responses:
+        "201":
+          description: Provider linked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkProviderResponse"
+  /providers/{id}:
+    delete:
+      summary: Unlink provider
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Provider unlinked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+  /providers/{id}/health:
+    post:
+      summary: Check linked provider health
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Health result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderHealthResponse"
+  /providers/latency:
+    get:
+      summary: Get provider latency map
+      responses:
+        "200":
+          description: Latency by provider id
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: "#/components/schemas/ProviderHealthResponse"
+  /providers/oauth/session:
+    post:
+      summary: Create an OAuth provider link session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthSessionRequest"
+      responses:
+        "200":
+          description: OAuth session id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthSessionResponse"
+  /shards/allocate:
+    post:
+      summary: Allocate shard rows for a file chunk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AllocateShardRequest"
+      responses:
+        "200":
+          description: Shard allocation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AllocateShardResponse"
+  /shards/upload:
+    post:
+      summary: Upload a shard multipart payload
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [shardId, file]
+              properties:
+                shardId:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Shard uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadShardResponse"
+  /shards/download/{id}:
+    get:
+      summary: Download shard bytes
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Shard bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Android session JWT or a 60-second assertion issued by the web BFF.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    RegisterRequest:
+      type: object
+      required: [username, authHash]
+      properties:
+        username:
+          type: string
+        authHash:
+          type: string
+    RegisterResponse:
+      type: object
+      required: [message, userId]
+      properties:
+        message:
+          type: string
+        userId:
+          type: integer
+    LoginRequest:
+      type: object
+      required: [username, authHash]
+      properties:
+        username:
+          type: string
+        authHash:
+          type: string
+    LoginResponse:
+      type: object
+      required: [token, expiresAt]
+      properties:
+        token:
+          type: string
+        expiresAt:
+          type: integer
+          description: Unix timestamp in seconds.
+    VerifyResponse:
+      type: object
+      required: [userId, username]
+      properties:
+        userId:
+          type: integer
+        username:
+          type: string
+    Volume:
+      type: object
+      required: [id, userId, name, description, masterKeyFingerprint, kdfSalt, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        masterKeyFingerprint:
+          type: string
+        kdfSalt:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateVolumeRequest:
+      type: object
+      required: [id, name, description, master_key_fingerprint, kdf_salt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        master_key_fingerprint:
+          type: string
+        kdf_salt:
+          type: string
+    UpdateVolumeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    DeleteVolumeResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: string
+    Folder:
+      type: object
+      required: [id, userId, volumeId, parentId, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        volumeId:
+          type: string
+        parentId:
+          type:
+            - integer
+            - "null"
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    File:
+      type: object
+      required: [id, userId, volumeId, folderId, name, size, mimeType, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        volumeId:
+          type: string
+        folderId:
+          type:
+            - integer
+            - "null"
+        name:
+          type: string
+        size:
+          type: integer
+        mimeType:
+          type: string
+        thumbnail:
+          type: string
+        fingerprint:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FileVersion"
+    FileVersion:
+      type: object
+      required: [id, fileId, version, size, createdAt]
+      properties:
+        id:
+          type: integer
+        fileId:
+          type: integer
+        version:
+          type: integer
+        size:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        chunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Chunk"
+    Chunk:
+      type: object
+      required: [id, fileVersionId, chunkIndex, size, dataShards, parityShards]
+      properties:
+        id:
+          type: integer
+        fileVersionId:
+          type: integer
+        chunkIndex:
+          type: integer
+        size:
+          type: integer
+        dataShards:
+          type: integer
+        parityShards:
+          type: integer
+        shards:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shard"
+    Shard:
+      type: object
+      required: [id, chunkId, shardIndex, provider, providerFileId, status]
+      properties:
+        id:
+          type: integer
+        chunkId:
+          type: integer
+        shardIndex:
+          type: integer
+        provider:
+          type: string
+        providerFileId:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ListFilesResponse:
+      type: object
+      required: [folders, files]
+      properties:
+        folders:
+          type:
+            - array
+            - "null"
+          items:
+            $ref: "#/components/schemas/Folder"
+        files:
+          type:
+            - array
+            - "null"
+          items:
+            $ref: "#/components/schemas/File"
+    CreateFolderRequest:
+      type: object
+      required: [name, volumeId]
+      properties:
+        name:
+          type: string
+        parentId:
+          type:
+            - integer
+            - "null"
+        volumeId:
+          type: string
+    CreateFileRequest:
+      type: object
+      required: [name, folderId, volumeId, size, mimeType]
+      properties:
+        name:
+          type: string
+        folderId:
+          type:
+            - integer
+            - "null"
+        volumeId:
+          type: string
+        size:
+          type: integer
+        mimeType:
+          type: string
+        thumbnail:
+          type: string
+        fingerprint:
+          type: string
+    CreateFileResponse:
+      type: object
+      required: [file, versionId]
+      properties:
+        file:
+          $ref: "#/components/schemas/File"
+        versionId:
+          type: integer
+        completedChunks:
+          type: array
+          items:
+            type: integer
+    Provider:
+      type: object
+      required: [id, provider, providerType, endpointUrl, bucket, region, status, lastCheckedAt, createdAt]
+      properties:
+        id:
+          type: integer
+        provider:
+          type: string
+        providerType:
+          type: string
+        endpointUrl:
+          type: string
+        bucket:
+          type: string
+        region:
+          type: string
+        status:
+          type: string
+        lastCheckedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    LinkProviderRequest:
+      type: object
+      required: [accessKey, secretKey, region, bucket, endpointUrl, providerType]
+      properties:
+        accessKey:
+          type: string
+        secretKey:
+          type: string
+        region:
+          type: string
+        bucket:
+          type: string
+        endpointUrl:
+          type: string
+        providerType:
+          type: string
+          enum: [s3, gcs, azure, b2]
+    LinkProviderResponse:
+      type: object
+      required: [message, id]
+      properties:
+        message:
+          type: string
+        id:
+          type: integer
+    OAuthSessionRequest:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+    OAuthSessionResponse:
+      type: object
+      required: [sessionId]
+      properties:
+        sessionId:
+          type: string
+    ProviderHealthResponse:
+      type: object
+      required: [status, latencyMs]
+      properties:
+        status:
+          type: string
+        latencyMs:
+          type: integer
+    AllocateShardRequest:
+      type: object
+      required: [fileVersionId, chunkIndex, chunkSize]
+      properties:
+        fileVersionId:
+          type: integer
+        chunkIndex:
+          type: integer
+        chunkSize:
+          type: integer
+    ShardAllocation:
+      type: object
+      required: [shardId, shardIndex, provider]
+      properties:
+        shardId:
+          type: integer
+        shardIndex:
+          type: integer
+        provider:
+          type: string
+    ChunkAllocation:
+      type: object
+      required: [dataShards, parityShards, allocations]
+      properties:
+        dataShards:
+          type: integer
+        parityShards:
+          type: integer
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShardAllocation"
+    AllocateShardResponse:
+      type: object
+      required: [allocation]
+      properties:
+        allocation:
+          $ref: "#/components/schemas/ChunkAllocation"
+    UploadShardResponse:
+      type: object
+      required: [message, providerFileId]
+      properties:
+        message:
+          type: string
+        providerFileId:
+          type: string
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string

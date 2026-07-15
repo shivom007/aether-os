@@ -1,0 +1,26 @@
+{
+  "name": "aether-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aether OS monorepo",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "concurrently \"pnpm dev:web\" \"pnpm dev:api\"",
+    "dev:web": "pnpm --dir apps/web dev",
+    "dev:client": "pnpm dev:web",
+    "dev:api": "cd services/api && go run ./cmd/api",
+    "dev:server": "pnpm dev:api",
+    "dev:worker": "cd services/api && go run ./cmd/worker",
+    "build": "pnpm build:web && pnpm build:api",
+    "build:web": "pnpm --dir apps/web build",
+    "build:api": "cd services/api && go build -o api ./cmd/api && go build -o worker ./cmd/worker",
+    "typecheck": "pnpm --dir packages/contracts typecheck && pnpm --dir apps/web exec tsc --noEmit --pretty false",
+    "test": "cd services/api && go test ./...",
+    "check": "pnpm typecheck && pnpm test",
+    "lint": "pnpm --dir apps/web lint",
+    "install:all": "pnpm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

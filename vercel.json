@@ -1,7 +1,7 @@
 {
   "experimentalServices": {
     "server": {
-      "root": "server",
+      "root": "services/api",
       "entrypoint": "cmd/api/main.go",
       "routePrefix": "/",
       "buildCommand": "go build -o main ./cmd/api"
