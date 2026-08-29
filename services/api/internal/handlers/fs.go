@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -21,13 +22,18 @@ type CreateFolderRequest struct {
 }
 
 type FileMetadataRequest struct {
-	Name        string `json:"name"`
-	FolderID    *uint  `json:"folderId"`
-	VolumeID    string `json:"volumeId"`
-	Size        int64  `json:"size"`
-	MimeType    string `json:"mimeType"`
-	Thumbnail   string `json:"thumbnail,omitempty"`
-	Fingerprint string `json:"fingerprint,omitempty"`
+	Name          string `json:"name"`
+	FolderID      *uint  `json:"folderId"`
+	VolumeID      string `json:"volumeId"`
+	Size          int64  `json:"size"`
+	MimeType      string `json:"mimeType"`
+	Thumbnail     string `json:"thumbnail,omitempty"`
+	Fingerprint   string `json:"fingerprint,omitempty"`
+	MediaMetadata string `json:"mediaMetadata,omitempty"`
+}
+
+type UpdateFileMediaMetadataRequest struct {
+	MediaMetadata string `json:"mediaMetadata"`
 }
 
 // Get userID from JWT middleware context
@@ -193,6 +199,9 @@ func RegisterFile(c *fiber.Ctx) error {
 	if req.Size > maxServerSize {
 		return c.Status(400).JSON(fiber.Map{"error": "File size exceeds the absolute server limit of 1GB"})
 	}
+	if err := validateMediaMetadata(req.MediaMetadata); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
 
 	// RESUMABLE UPLOADS: Check if file already exists with this fingerprint
 	if req.Fingerprint != "" {
@@ -220,14 +229,15 @@ func RegisterFile(c *fiber.Ctx) error {
 	}
 
 	file := models.File{
-		Name:        req.Name,
-		FolderID:    req.FolderID,
-		VolumeID:    req.VolumeID,
-		Size:        req.Size,
-		MimeType:    req.MimeType,
-		Thumbnail:   "",
-		Fingerprint: req.Fingerprint,
-		UserID:      userID,
+		Name:          req.Name,
+		FolderID:      req.FolderID,
+		VolumeID:      req.VolumeID,
+		Size:          req.Size,
+		MimeType:      req.MimeType,
+		Thumbnail:     "",
+		Fingerprint:   req.Fingerprint,
+		MediaMetadata: req.MediaMetadata,
+		UserID:        userID,
 	}
 
 	if result := db.DB.Create(&file); result.Error != nil {
@@ -296,6 +306,46 @@ func GetFileDetails(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(file)
+}
+
+func UpdateFileMediaMetadata(c *fiber.Ctx) error {
+	userID := getUserID(c)
+	if userID == 0 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+
+	var req UpdateFileMediaMetadataRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+	}
+	if err := validateMediaMetadata(req.MediaMetadata); err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	var file models.File
+	if err := db.DB.Where("id = ? AND user_id = ?", c.Params("id"), userID).First(&file).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "File not found"})
+	}
+
+	file.MediaMetadata = req.MediaMetadata
+	if err := db.DB.Save(&file).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to update media metadata"})
+	}
+
+	return c.JSON(file)
+}
+
+func validateMediaMetadata(value string) error {
+	if value == "" {
+		return nil
+	}
+	if len(value) > 16*1024 {
+		return fmt.Errorf("mediaMetadata exceeds the 16KB limit")
+	}
+	if !json.Valid([]byte(value)) {
+		return fmt.Errorf("mediaMetadata must be valid JSON")
+	}
+	return nil
 }
 
 func DeleteFile(c *fiber.Ctx) error {

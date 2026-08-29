@@ -5,6 +5,7 @@ import { goFetch } from "@/lib/go-backend"
 import { getGoAssertion } from "@/lib/bff-assertion"
 import { toFolderInodeID, toGoID } from "@/lib/inodes"
 import type { GoListFilesResponse, Inode } from "@/lib/types"
+import { parseMediaMetadata } from "@/lib/media/metadata"
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const s = await getSession()
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         kind: "file" as const,
         size_bytes: f.size,
         mime_type: f.mimeType,
+        media_metadata: parseMediaMetadata(f.mediaMetadata),
         thumbnail_b64: f.thumbnail || null,
         materialized_path: "/" + f.name,
         created_at: f.createdAt,

@@ -91,6 +91,7 @@ export interface GoFile {
   mimeType: string
   thumbnail?: string
   fingerprint?: string
+  mediaMetadata?: string
   createdAt: ISODateString
   updatedAt: ISODateString
   versions?: GoFileVersion[]
@@ -147,6 +148,7 @@ export interface GoCreateFileRequest {
   mimeType: string
   thumbnail?: string
   fingerprint?: string
+  mediaMetadata?: string
 }
 
 export interface GoCreateFileResponse {
@@ -252,6 +254,30 @@ export interface WebVolume {
   inode_count: number
 }
 
+export type MediaTrackKind = "video" | "audio" | "text" | "image" | "other"
+
+export interface MediaTrackMetadata {
+  kind: MediaTrackKind
+  codec: string
+  codec_id?: string
+  codec_token?: string
+  profile?: string
+  language?: string
+  channels?: number
+  channel_layout?: string
+  sample_rate?: number
+  width?: number
+  height?: number
+  frame_rate?: number
+}
+
+export interface MediaMetadata {
+  schema_version: 1
+  container: string | null
+  duration_seconds?: number
+  tracks: MediaTrackMetadata[]
+}
+
 export interface WebCreateVolumeRequest {
   name: string
   description?: string | null
@@ -267,6 +293,7 @@ export interface WebInode {
   kind: InodeKind
   size_bytes: number
   mime_type: string | null
+  media_metadata?: MediaMetadata | null
   thumbnail_b64?: string | null
   materialized_path: string
   created_at: ISODateString
@@ -280,6 +307,7 @@ export interface WebCreateInodeRequest {
   kind: InodeKind
   size_bytes?: number
   mime_type?: string | null
+  media_metadata?: MediaMetadata | null
   thumbnail?: string
   fingerprint?: string
 }

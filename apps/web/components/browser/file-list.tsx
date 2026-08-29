@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { Folder, FileIcon, Search, MoreVertical, Download, Trash2, Maximize2, Play, Info, Image as ImageIcon, List, LayoutGrid } from "lucide-react"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { derive_master_key, fromB64 } from "@/lib/crypto/core"
-import { StreamingEngine } from "@/components/browser/streaming-engine"
+import { SecureVideoPlayer } from "@/components/browser/secure-video-player"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   ContextMenu,
@@ -525,12 +525,23 @@ export function FileList({
           {playingVideo && (
             isSwReady ? (
               <>
-                <StreamingEngine volumeId={volumeId} masterKey={playingVideo.masterKey} engine={engine} kdfSalt={kdfSalt} />
-                <video 
-                  controls 
-                  autoPlay 
-                  src={`/stream/${playingVideo.inode.id}`} 
-                  className="w-full h-auto max-h-[80vh] object-contain"
+                <SecureVideoPlayer
+                  inode={playingVideo.inode}
+                  volumeId={volumeId}
+                  masterKey={playingVideo.masterKey}
+                  engine={engine}
+                  kdfSalt={kdfSalt}
+                  onMetadata={(mediaMetadata) => {
+                    setPlayingVideo((current) => current
+                      ? {
+                          ...current,
+                          inode: {
+                            ...current.inode,
+                            media_metadata: mediaMetadata,
+                          },
+                        }
+                      : null)
+                  }}
                 />
               </>
             ) : (

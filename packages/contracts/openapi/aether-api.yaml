@@ -238,6 +238,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+  /fs/file/{id}/media-metadata:
+    patch:
+      summary: Update parsed media metadata for a file
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mediaMetadata]
+              properties:
+                mediaMetadata:
+                  type: string
+                  maxLength: 16384
+      responses:
+        "200":
+          description: Updated file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
   /providers:
     get:
       summary: List linked providers
@@ -535,6 +558,9 @@ components:
           type: string
         fingerprint:
           type: string
+        mediaMetadata:
+          type: string
+          maxLength: 16384
         createdAt:
           type: string
           format: date-time
@@ -654,6 +680,9 @@ components:
           type: string
         fingerprint:
           type: string
+        mediaMetadata:
+          type: string
+          maxLength: 16384
     CreateFileResponse:
       type: object
       required: [file, versionId]

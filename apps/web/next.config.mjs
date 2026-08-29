@@ -1,3 +1,8 @@
+import { createRequire } from "node:module"
+
+const require = createRequire(import.meta.url)
+const mediaInfoWasmPath = require.resolve("mediainfo.js/MediaInfoModule.wasm")
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["wasm-erasure"],
@@ -25,6 +30,10 @@ const nextConfig = {
     // exist in browsers but the code paths are never hit in WASM mode.
     config.resolve = {
       ...config.resolve,
+      alias: {
+        ...config.resolve?.alias,
+        "MediaInfoModule.wasm": mediaInfoWasmPath,
+      },
       fallback: {
         ...config.resolve?.fallback,
         env: false,
@@ -80,4 +89,3 @@ export default nextConfig
 if (!process.env.VERCEL) {
   import('@opennextjs/cloudflare').then(m => m.initOpenNextCloudflareForDev());
 }
-

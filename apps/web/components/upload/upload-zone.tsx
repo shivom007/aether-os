@@ -12,7 +12,12 @@ import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
 import type { ChunkAllocationResponse } from "@/lib/shards"
-import type { Inode } from "@/lib/types"
+import type { Inode, MediaMetadata } from "@/lib/types"
+import {
+  incompatibleAudioMessage,
+  prepareUploadFiles,
+} from "@/lib/media/upload-preflight"
+import { isLikelyVideoFile } from "@/lib/media/probe"
 
 export interface UploadZoneProps {
   volumeId: string
@@ -35,7 +40,15 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
   const [files, setFiles] = useState<FileProgress[]>([])
 
   const processFile = useCallback(
-    async (file: File, idx: number, abort: AbortController, masterKey: CryptoKey) => {
+    async (
+      file: File,
+      idx: number,
+      abort: AbortController,
+      masterKey: CryptoKey,
+      mediaMetadata: MediaMetadata | null,
+      isVideo: boolean,
+      mimeType: string,
+    ) => {
       if (!kdfSalt) {
         toast.error("Volume has no KDF salt set")
         return
@@ -58,7 +71,8 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
             name: file.name,
             kind: "file",
             size_bytes: file.size,
-            mime_type: file.type,
+            mime_type: mimeType,
+            media_metadata: mediaMetadata,
             thumbnail: thumbnail_b64 || undefined,
           }),
           signal: abort.signal,
@@ -71,7 +85,6 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
         // 2. Hybrid Chunking Architecture
         // - Videos: 5MB chunks (to allow Range Request streaming)
         // - Others: 1 massive chunk (for clean storage)
-        const isVideo = file.type.startsWith("video/")
         const dynamicChunkSize = isVideo ? (5 * 1024 * 1024) : Math.max(1, file.size)
         const totalChunks = Math.max(1, Math.ceil(file.size / dynamicChunkSize))
         
@@ -196,7 +209,7 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
 
       const validFiles: File[] = []
       for (const f of acceptedFiles) {
-        const isVideo = f.type.startsWith("video/")
+        const isVideo = isLikelyVideoFile(f)
         const maxSize = isVideo ? (1024 * 1024 * 1024) : (100 * 1024 * 1024) // 1GB for videos, 100MB for others
         
         if (f.size > maxSize) {
@@ -207,6 +220,11 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
       }
 
       if (validFiles.length === 0) return;
+      const preparedFiles = await prepareUploadFiles(validFiles)
+      for (const prepared of preparedFiles) {
+        const warning = incompatibleAudioMessage(prepared)
+        if (warning) toast.warning(warning, { duration: 10_000 })
+      }
 
       let pass = ""
       try {
@@ -220,11 +238,11 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
       pass = ""
 
       const startIdx = files.length
-      const entries = validFiles.map(() => new AbortController())
+      const entries = preparedFiles.map(() => new AbortController())
       setFiles((prev) => [
         ...prev,
-        ...validFiles.map((f, j) => ({
-          name: f.name,
+        ...preparedFiles.map((prepared, j) => ({
+          name: prepared.file.name,
           total: 1, // Always 1 chunk
           uploaded: 0,
           status: "queued" as const,
@@ -232,9 +250,18 @@ export function UploadZone({ volumeId, parentId = null, kdfSalt, onUploadComplet
         })),
       ])
       
-      for (let i = 0; i < validFiles.length; i++) {
+      for (let i = 0; i < preparedFiles.length; i++) {
         if (!entries[i].signal.aborted) {
-          await processFile(validFiles[i], startIdx + i, entries[i], masterKey)
+          const prepared = preparedFiles[i]
+          await processFile(
+            prepared.file,
+            startIdx + i,
+            entries[i],
+            masterKey,
+            prepared.mediaMetadata,
+            prepared.isVideo,
+            prepared.mimeType,
+          )
         }
       }
     },

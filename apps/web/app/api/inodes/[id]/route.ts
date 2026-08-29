@@ -5,6 +5,12 @@ import { goFetch } from "@/lib/go-backend"
 import { getGoAssertion } from "@/lib/bff-assertion"
 import { toFolderInodeID, toGoID } from "@/lib/inodes"
 import type { GoFile } from "@/lib/types"
+import { MediaMetadataSchema, parseMediaMetadata, serializeMediaMetadata } from "@/lib/media/metadata"
+import { z } from "zod"
+
+const PatchBody = z.object({
+  media_metadata: MediaMetadataSchema,
+})
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const s = await getSession()
@@ -23,6 +29,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       kind: "file" as const,
       size_bytes: file.size,
       mime_type: file.mimeType,
+      media_metadata: parseMediaMetadata(file.mediaMetadata),
       thumbnail_b64: file.thumbnail || null,
       materialized_path: "/" + file.name,
       created_at: file.createdAt,
@@ -51,6 +58,34 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   } catch (err) {
     console.error("[DEBUG] Error in /api/inodes/[id]:", err)
     return fail((err as Error).message, 404)
+  }
+}
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const s = await getSession()
+  if (!s) return fail("unauthorized", 401)
+  const { id } = await ctx.params
+  if (id.startsWith("folder-")) return fail("media metadata is only valid for files", 400)
+
+  const parsed = PatchBody.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message || "Invalid body", 400)
+
+  const token = await getGoAssertion()
+  try {
+    const file = await goFetch<GoFile>(`/fs/file/${toGoID(id)}/media-metadata`, {
+      method: "PATCH",
+      token,
+      body: JSON.stringify({
+        mediaMetadata: serializeMediaMetadata(parsed.data.media_metadata),
+      }),
+    })
+    return ok({
+      id: String(file.id),
+      media_metadata: parseMediaMetadata(file.mediaMetadata),
+      updated_at: file.updatedAt,
+    })
+  } catch (err) {
+    return fail((err as Error).message, 500)
   }
 }
 

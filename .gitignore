@@ -43,7 +43,8 @@ apps/android/**/build/
 
 # Rust / WASM
 **/target/
-
+.qwen/
+.runtime-logs/
 # Local secrets, exports, and logs
 .env*
 !.env.example

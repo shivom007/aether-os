@@ -11,12 +11,13 @@ interface StreamingEngineProps {
   masterKey: CryptoKey // unextractable WebCrypto key
   engine?: "v1" | "v2"
   kdfSalt?: string | null
+  onReady?: () => void
 }
 
 export const streamingMetaCache = new Map<string, { inode: Inode; chunks: PhysicalChunk[] }>()
 export const prefetchShardCache = new Map<string, Promise<Uint8Array>>()
 
-export function StreamingEngine({ volumeId, masterKey, engine = "v1", kdfSalt }: StreamingEngineProps) {
+export function StreamingEngine({ volumeId, masterKey, engine = "v1", kdfSalt, onReady }: StreamingEngineProps) {
   const isRegistered = useRef(false)
 
   // SW is registered globally by file-list.tsx
@@ -200,8 +201,9 @@ export function StreamingEngine({ volumeId, masterKey, engine = "v1", kdfSalt }:
     }
 
     navigator.serviceWorker.addEventListener("message", handleMessage)
+    onReady?.()
     return () => navigator.serviceWorker.removeEventListener("message", handleMessage)
-  }, [volumeId, masterKey, engine, kdfSalt])
+  }, [volumeId, masterKey, engine, kdfSalt, onReady])
 
   return null // Headless component
 }

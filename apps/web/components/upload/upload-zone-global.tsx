@@ -13,9 +13,14 @@ import { generateEncryptedThumbnail } from "@/lib/crypto/thumbnail"
 import { usePassphrasePrompt } from "@/components/providers/passphrase-prompt-provider"
 import { encodeShards } from "@/lib/erasure"
 import type { ChunkAllocationResponse } from "@/lib/shards"
-import type { Inode } from "@/lib/types"
+import type { Inode, MediaMetadata } from "@/lib/types"
 import { useUploadStore } from "@/lib/store/upload-store"
 import { globalUploadQueue } from "@/lib/utils/async-queue"
+import {
+  incompatibleAudioMessage,
+  prepareUploadFiles,
+} from "@/lib/media/upload-preflight"
+import { isLikelyVideoFile } from "@/lib/media/probe"
 
 export interface UploadZoneGlobalProps {
   volumeId: string
@@ -38,7 +43,10 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
     fileId: string,
     abort: AbortController,
     masterKey: CryptoKey,
-    vId: string
+    vId: string,
+    mediaMetadata: MediaMetadata | null,
+    isVideo: boolean,
+    mimeType: string,
   ) => {
     updateFile(fileId, { status: "encrypting" })
 
@@ -58,7 +66,8 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
             name: file.name,
           kind: "file",
           size_bytes: file.size,
-          mime_type: file.type,
+          mime_type: mimeType,
+          media_metadata: mediaMetadata,
           thumbnail: thumbnail_b64 || undefined,
           fingerprint: fingerprint,
         }),
@@ -67,7 +76,6 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
       inodeId = inode.id
       updateFile(fileId, { status: "uploading", inodeId: inode.id })
 
-      const isVideo = file.type.startsWith("video/")
       const dynamicChunkSize = isVideo ? (5 * 1024 * 1024) : Math.max(1, file.size)
       const totalChunks = Math.max(1, Math.ceil(file.size / dynamicChunkSize))
       
@@ -208,7 +216,7 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
 
       const validFiles: File[] = []
       for (const f of acceptedFiles) {
-        const isVideo = f.type.startsWith("video/")
+        const isVideo = isLikelyVideoFile(f)
         const maxSize = isVideo ? (1024 * 1024 * 1024) : (100 * 1024 * 1024) 
         if (f.size > maxSize) {
           toast.error(`File ${f.name} exceeds the ${isVideo ? "1GB" : "100MB"} limit.`)
@@ -218,6 +226,11 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
       }
 
       if (validFiles.length === 0) return;
+      const preparedFiles = await prepareUploadFiles(validFiles)
+      for (const prepared of preparedFiles) {
+        const warning = incompatibleAudioMessage(prepared)
+        if (warning) toast.warning(warning, { duration: 10_000 })
+      }
 
       let pass = ""
       try {
@@ -229,9 +242,9 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
       const { masterKey } = await derive_master_key_v2(pass, fromB64(kdfSalt))
       pass = ""
 
-      const newFiles = validFiles.map((f) => ({
+      const newFiles = preparedFiles.map(({ file }) => ({
         id: crypto.randomUUID(),
-        name: f.name,
+        name: file.name,
         total: 1, 
         uploaded: 0,
         status: "queued" as const,
@@ -241,11 +254,21 @@ export function UploadZoneGlobal({ volumeId, parentId = null, kdfSalt, engine = 
 
       addFiles(newFiles)
       
-      for (let i = 0; i < validFiles.length; i++) {
+      for (let i = 0; i < preparedFiles.length; i++) {
         const fileData = newFiles[i]
+        const prepared = preparedFiles[i]
         // DO NOT await here! Let them run in the background unattached to React's lifecycle!
         globalUploadQueue.add(() => 
-          processFile(validFiles[i], fileData.id, fileData.abort, masterKey, volumeId)
+          processFile(
+            prepared.file,
+            fileData.id,
+            fileData.abort,
+            masterKey,
+            volumeId,
+            prepared.mediaMetadata,
+            prepared.isVideo,
+            prepared.mimeType,
+          )
         ).catch(console.error)
       }
     },

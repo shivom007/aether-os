@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth"
 import { goFetch } from "@/lib/go-backend"
 import { getGoAssertion } from "@/lib/bff-assertion"
 import { toFolderInodeID, toGoNumericID } from "@/lib/inodes"
+import { MediaMetadataSchema, serializeMediaMetadata } from "@/lib/media/metadata"
 import type {
   GoCreateFileRequest,
   GoCreateFileResponse,
@@ -20,6 +21,7 @@ const Body = z.object({
   kind: z.enum(["file", "dir"]),
   size_bytes: z.number().int().min(0).default(0),
   mime_type: z.string().max(255).nullable().optional(),
+  media_metadata: MediaMetadataSchema.nullable().optional(),
   thumbnail: z.string().optional(),
   fingerprint: z.string().optional(),
 })
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
   const token = await getGoAssertion()
   const parsed = Body.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return fail(parsed.error.issues[0]?.message || "Invalid body", 400)
-  const { volume_id, parent_id, name, kind, size_bytes, mime_type, thumbnail, fingerprint } = parsed.data
+  const { volume_id, parent_id, name, kind, size_bytes, mime_type, media_metadata, thumbnail, fingerprint } = parsed.data
 
   try {
     if (kind === "dir") {
@@ -64,6 +66,7 @@ export async function POST(req: NextRequest) {
       name,
       size: size_bytes,
       mimeType: mime_type || "application/octet-stream",
+      mediaMetadata: media_metadata ? serializeMediaMetadata(media_metadata) : undefined,
       folderId: parentId,
       volumeId: volume_id,
       thumbnail,
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest) {
       kind: "file",
       size_bytes: result.file.size,
       mime_type: result.file.mimeType,
+      media_metadata: media_metadata || null,
       thumbnail_b64: result.file.thumbnail || null,
       materialized_path: "/" + result.file.name,
       created_at: result.file.createdAt,

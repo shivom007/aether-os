@@ -74,6 +74,7 @@ func main() {
 	api.Delete("/fs/folder/:id", handlers.DeleteFolder)
 	api.Post("/fs/file", handlers.RegisterFile)
 	api.Get("/fs/file/:id", handlers.GetFileDetails)
+	api.Patch("/fs/file/:id/media-metadata", handlers.UpdateFileMediaMetadata)
 	api.Delete("/fs/file/:id", handlers.DeleteFile)
 
 	// Providers

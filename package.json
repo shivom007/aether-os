@@ -15,7 +15,9 @@
     "build:web": "pnpm --dir apps/web build",
     "build:api": "cd services/api && go build -o api ./cmd/api && go build -o worker ./cmd/worker",
     "typecheck": "pnpm --dir packages/contracts typecheck && pnpm --dir apps/web exec tsc --noEmit --pretty false",
-    "test": "cd services/api && go test ./...",
+    "test": "pnpm test:web && pnpm test:api",
+    "test:web": "pnpm --dir apps/web test",
+    "test:api": "cd services/api && go test ./...",
     "check": "pnpm typecheck && pnpm test",
     "lint": "pnpm --dir apps/web lint",
     "install:all": "pnpm install"
