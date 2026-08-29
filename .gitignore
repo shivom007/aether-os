@@ -71,3 +71,4 @@ Thumbs.db
 *.ps1
 test*.js
 test*.ts
+archive/
