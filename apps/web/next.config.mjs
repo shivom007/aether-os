@@ -7,7 +7,7 @@ const mediaInfoWasmPath = require.resolve("mediainfo.js/MediaInfoModule.wasm")
 const nextConfig = {
   transpilePackages: ["wasm-erasure"],
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,
@@ -72,7 +72,7 @@ const nextConfig = {
           },
           {
             key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
+            value: 'credentialless',
           }
         ],
       },

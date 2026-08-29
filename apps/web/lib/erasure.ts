@@ -180,11 +180,11 @@ export async function fetchMinimumShards(
     const checkCompletion = () => {
       if (successCount >= dataShards) {
         if (hedgeTimerId) clearTimeout(hedgeTimerId)
-        abortController.abort() // Cancel any pending/in-flight redundant fetches
+        try { abortController.abort() } catch (e) {} // Cancel any pending/in-flight redundant fetches
         resolve(fetched)
       } else if (failCount > (sortedShards.length - dataShards)) {
         if (hedgeTimerId) clearTimeout(hedgeTimerId)
-        abortController.abort()
+        try { abortController.abort() } catch (e) {}
         reject(new Error(`Failed to fetch enough shards. ${failCount} failed.`))
       }
     }

@@ -51,6 +51,7 @@ export function SecureVideoPlayer({
           throw new Error("No media tracks were found")
         }
         setMetadata(probed)
+        setIsProbing(false)
         setProbeError(null)
         onMetadata?.(probed)
 
@@ -70,13 +71,12 @@ export function SecureVideoPlayer({
         if (abort.signal.aborted) return
         console.error("[Media] Stream probe failed:", error)
         setProbeError(error instanceof Error ? error.message : "Media probe failed")
-      })
-      .finally(() => {
-        if (!abort.signal.aborted) setIsProbing(false)
+        setIsProbing(false)
       })
 
     return () => abort.abort()
-  }, [engineReady, inode.id, inode.size_bytes, metadata, onMetadata])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineReady, inode.id, inode.size_bytes])
 
   const compatibility = useMemo(
     () => metadata

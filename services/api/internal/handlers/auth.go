@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"aether-server/internal/db"
 	"aether-server/internal/models"
 	"github.com/gofiber/fiber/v2"
@@ -116,10 +118,16 @@ func Register(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Username already exists"})
 	}
 
+	bcryptHash, err := bcrypt.GenerateFromPassword(hashBytes, 12)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Failed to hash credentials"})
+	}
+
 	user := models.User{
-		Username:    req.Username,
-		AuthHash:    hashBytes,
-		AuthVersion: 1,
+		Username:        req.Username,
+		AuthHash:        bcryptHash,
+		AuthHashVersion: 2,
+		AuthVersion:     1,
 	}
 
 	if result := db.DB.Create(&user); result.Error != nil {
@@ -140,11 +148,30 @@ func authenticateCredentials(req LoginRequest) (models.User, error) {
 		return models.User{}, fiber.NewError(400, "Invalid auth hash format")
 	}
 
-	if len(user.AuthHash) != len(reqHashBytes) {
-		return models.User{}, fiber.NewError(401, "Invalid credentials")
-	}
-	if subtle.ConstantTimeCompare(user.AuthHash, reqHashBytes) != 1 {
-		return models.User{}, fiber.NewError(401, "Invalid credentials")
+	if user.AuthHashVersion == 1 || user.AuthHashVersion == 0 {
+		if len(user.AuthHash) != len(reqHashBytes) {
+			return models.User{}, fiber.NewError(401, "Invalid credentials")
+		}
+		if subtle.ConstantTimeCompare(user.AuthHash, reqHashBytes) != 1 {
+			return models.User{}, fiber.NewError(401, "Invalid credentials")
+		}
+
+		// Transparently migrate to bcrypt
+		bcryptHash, err := bcrypt.GenerateFromPassword(reqHashBytes, 12)
+		if err == nil {
+			user.AuthHash = bcryptHash
+			user.AuthHashVersion = 2
+			db.DB.Model(&user).Updates(map[string]interface{}{
+				"auth_hash":         bcryptHash,
+				"auth_hash_version": 2,
+			})
+		}
+	} else if user.AuthHashVersion == 2 {
+		if err := bcrypt.CompareHashAndPassword(user.AuthHash, reqHashBytes); err != nil {
+			return models.User{}, fiber.NewError(401, "Invalid credentials")
+		}
+	} else {
+		return models.User{}, fiber.NewError(401, "Invalid auth hash version")
 	}
 
 	return user, nil

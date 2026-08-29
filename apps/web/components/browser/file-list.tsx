@@ -128,17 +128,37 @@ export function FileList({
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return
     
+    // If already controlling, we're good
+    if (navigator.serviceWorker.controller) {
+      setIsSwReady(true)
+    }
+    
     // Register SW globally for the browser
-    navigator.serviceWorker.register("/sw.js").then(() => {
-      // Sometimes it's ready immediately after register if it was already installed
+    navigator.serviceWorker.register("/sw.js").then(async (reg) => {
+      // If already controlling after register, done
+      if (navigator.serviceWorker.controller) {
+        setIsSwReady(true)
+        return
+      }
+      // If SW installed but not yet controlling (first visit), wait for it to activate
+      const sw = reg.installing || reg.waiting || reg.active
+      if (sw && sw.state !== "activated") {
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "activated" && navigator.serviceWorker.controller) {
+            setIsSwReady(true)
+          }
+        })
+      }
+    })
+    
+    // Also use the .ready promise as an additional fallback
+    navigator.serviceWorker.ready.then(() => {
+      // .ready resolves when an active SW exists, but controller may still be null
+      // on first load. A reload or controllerchange event is needed.
       if (navigator.serviceWorker.controller) {
         setIsSwReady(true)
       }
     })
-    
-    if (navigator.serviceWorker.controller) {
-      setIsSwReady(true)
-    }
     
     const handleControllerChange = () => setIsSwReady(true)
     navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange)

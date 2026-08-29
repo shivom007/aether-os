@@ -10,6 +10,7 @@ type User struct {
 	ID              uint   `gorm:"primaryKey"`
 	Username        string `gorm:"uniqueIndex;not null"`
 	AuthHash        []byte `gorm:"not null"` // HashA from Argon2id
+	AuthHashVersion uint   `gorm:"not null;default:1" json:"-"`
 	AuthVersion     uint   `gorm:"not null;default:1" json:"-"`
 	IsPremium       bool   `gorm:"default:false" json:"isPremium"`
 	R2BackupEnabled bool   `gorm:"default:false" json:"r2BackupEnabled"`

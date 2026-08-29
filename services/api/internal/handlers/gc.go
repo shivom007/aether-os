@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
+	"os"
 	"time"
 
 	"aether-server/internal/db"
@@ -54,8 +56,10 @@ func RunGarbageCollection() (int64, error) {
 
 // GCHandler triggers garbage collection manually
 func GCHandler(c *fiber.Ctx) error {
-	// In a real production application, this endpoint would be protected by admin middleware or an API token.
-	// For this Beta implementation, we allow direct invocation for testing convenience.
+	secret := os.Getenv("ADMIN_SECRET")
+	if secret == "" || subtle.ConstantTimeCompare([]byte(secret), []byte(c.Get("X-Admin-Secret"))) != 1 {
+		return c.Status(401).JSON(fiber.Map{"error": "Unauthorized"})
+	}
 	deletedCount, err := RunGarbageCollection()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})

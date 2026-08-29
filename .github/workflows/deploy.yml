@@ -7,8 +7,12 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
   deploy-backend:
     name: Deploy Backend
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -24,6 +28,7 @@ jobs:
 
   deploy-frontend:
     name: Deploy Frontend
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

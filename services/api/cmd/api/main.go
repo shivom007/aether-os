@@ -12,6 +12,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/joho/godotenv"
 )
@@ -34,9 +35,11 @@ func main() {
 
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
-		AppName:           "Aether Metadata Service",
-		BodyLimit:         500 * 1024 * 1024, // 500 MB limit
-		StreamRequestBody: true,
+		AppName:            "Aether Metadata Service",
+		BodyLimit:          500 * 1024 * 1024, // 500 MB limit
+		StreamRequestBody:  true,
+		EnableIPValidation: true,
+		ProxyHeader:        fiber.HeaderXForwardedFor,
 	})
 
 	// Middleware
@@ -62,9 +65,15 @@ func main() {
 	api.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok", "message": "Aether API v1 is running."})
 	})
-	api.Post("/auth/register", handlers.Register)
+
+	authLimiter := limiter.New(limiter.Config{
+		Max:        5,
+		Expiration: 1 * time.Minute,
+	})
+
+	api.Post("/auth/register", authLimiter, handlers.Register)
 	api.Post("/auth/verify", handlers.Verify)
-	api.Post("/auth/login", handlers.Login)
+	api.Post("/auth/login", authLimiter, handlers.Login)
 	api.Post("/auth/refresh", handlers.Refresh)
 	api.Post("/auth/logout", handlers.Logout)
 

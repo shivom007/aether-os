@@ -33,6 +33,7 @@ async function getMediaInfo(): Promise<MediaInfo<"object">> {
       createMediaInfo({
         chunkSize: 256 * 1024,
         format: "object",
+        locateFile: () => "/MediaInfoModule.wasm",
       }),
     )
   }
