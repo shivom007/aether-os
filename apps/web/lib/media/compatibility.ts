@@ -20,6 +20,13 @@ export interface MediaCompatibility {
 
 type CanPlay = (type: string) => CanPlayTypeResult
 
+const SAFE_VIDEO_CODECS = ["avc1", "hvc1", "vp8", "vp09", "av01", "theora"]
+const SAFE_AUDIO_CODECS = ["mp4a", "opus", "vorbis", "flac", "mp3"]
+
+function isSafeFallback(codec: string, safeList: string[]): boolean {
+  return safeList.some((c) => codec.startsWith(c))
+}
+
 export function assessMediaCompatibility(
   metadata: MediaMetadata | null,
   fallbackMimeType: string | null | undefined,
@@ -41,9 +48,13 @@ export function assessMediaCompatibility(
     }
   }
 
-  const videoSupport = videoTrack.codec_token
+  let videoSupport = videoTrack.codec_token
     ? probe(withCodecs(mimeType, [videoTrack.codec_token]))
     : probe(mimeType)
+
+  if (!videoSupport && videoTrack.codec_token && isSafeFallback(videoTrack.codec_token, SAFE_VIDEO_CODECS)) {
+    videoSupport = probe(mimeType)
+  }
 
   if (videoTrack.codec_token && !videoSupport) {
     return {
@@ -78,7 +89,7 @@ export function assessMediaCompatibility(
     }
   }
 
-  const combinedSupport = probe(
+  let combinedSupport = probe(
     withCodecs(
       mimeType,
       [videoTrack.codec_token, audioTrack.codec_token].filter(
@@ -86,6 +97,13 @@ export function assessMediaCompatibility(
       ),
     ),
   )
+
+  if (!combinedSupport && isSafeFallback(audioTrack.codec_token, SAFE_AUDIO_CODECS)) {
+    combinedSupport = probe(withCodecs(mimeType, [videoTrack.codec_token!]))
+    if (!combinedSupport && isSafeFallback(videoTrack.codec_token!, SAFE_VIDEO_CODECS)) {
+      combinedSupport = probe(mimeType)
+    }
+  }
 
   return {
     status: combinedSupport ? "supported" : "unsupported-audio",

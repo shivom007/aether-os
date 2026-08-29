@@ -68,9 +68,15 @@ describe("assessMediaCompatibility", () => {
 
   it("reports an unsupported video codec before evaluating audio", () => {
     const result = assessMediaCompatibility(
-      eac3Metadata,
+      {
+        ...eac3Metadata,
+        tracks: [
+          { ...eac3Metadata.tracks[0], codec_token: "unsupported-video-codec" },
+          eac3Metadata.tracks[1],
+        ],
+      },
       "video/matroska",
-      (type) => type.includes("avc1") ? "" : "probably",
+      (type) => type.includes("unsupported-video-codec") ? "" : "probably",
     )
 
     expect(result.status).toBe("unsupported-video")
