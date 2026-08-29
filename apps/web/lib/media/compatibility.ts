@@ -41,20 +41,11 @@ export function assessMediaCompatibility(
     }
   }
 
-  // Try with specific codec string first, then fall back to just the container
-  // canPlayType often returns "" for short codec tokens (e.g. "vp09") even though
-  // the browser fully supports the codec — it needs the full profile string like
-  // "vp09.00.10.08". So we also try the bare container as a fallback.
-  let videoSupport = videoTrack.codec_token
+  const videoSupport = videoTrack.codec_token
     ? probe(withCodecs(mimeType, [videoTrack.codec_token]))
     : probe(mimeType)
 
-  if (!videoSupport && videoTrack.codec_token) {
-    // Fallback: check if the container itself is playable
-    videoSupport = probe(mimeType)
-  }
-
-  if (!videoSupport) {
+  if (videoTrack.codec_token && !videoSupport) {
     return {
       status: "unsupported-video",
       mimeType,
@@ -87,7 +78,7 @@ export function assessMediaCompatibility(
     }
   }
 
-  let combinedSupport = probe(
+  const combinedSupport = probe(
     withCodecs(
       mimeType,
       [videoTrack.codec_token, audioTrack.codec_token].filter(
@@ -95,11 +86,6 @@ export function assessMediaCompatibility(
       ),
     ),
   )
-
-  // Fallback: if combined codec string fails, try just the container
-  if (!combinedSupport) {
-    combinedSupport = probe(mimeType)
-  }
 
   return {
     status: combinedSupport ? "supported" : "unsupported-audio",

@@ -159,7 +159,7 @@ function codecToken(kind: MediaTrackKind, format: string, codecID?: string): str
     if (value.includes("avc") || value.includes("h.264")) return "avc1"
     if (value.includes("hevc") || value.includes("h.265")) return "hvc1"
     if (value.includes("av1")) return "av01"
-    if (value.includes("vp9")) return "vp09"
+    if (value.includes("vp9")) return "vp09.00.10.08"
     if (value.includes("vp8")) return "vp8"
     if (value.includes("theora")) return "theora"
   }
