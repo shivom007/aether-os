@@ -6,7 +6,8 @@ import { api } from "@/lib/api"
 import type { Volume } from "@/lib/types"
 import { VolumesTable } from "@/components/volumes/volumes-table"
 import { CreateVolumeDialog } from "@/components/volumes/create-volume-dialog"
-import { VolumeDrawer } from "@/components/volumes/volume-drawer"
+import { VolumeDrawerTesting } from "@/components/volumes/volume-drawer-testing"
+
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
@@ -38,13 +39,16 @@ export default function VolumesPage() {
         volumes={data ?? []}
         isLoading={isLoading}
         onSelect={(v) => setSelectedId(v.id)}
+        baseHref="/dashboard/volumes"
       />
 
       <CreateVolumeDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <VolumeDrawer
+      <VolumeDrawerTesting
         volumeId={selectedId}
         onClose={() => setSelectedId(null)}
       />
+
+
     </div>
   )
 }

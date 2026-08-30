@@ -39,7 +39,7 @@ export function UploadThroughputChart() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="aspect-[16/7]">
+        <ChartContainer config={config} className="aspect-16/7">
           <AreaChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
             <defs>
               <linearGradient id="tp" x1="0" y1="0" x2="0" y2="1">
@@ -81,7 +81,7 @@ export function EncodeLatencyChart() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={config} className="aspect-[16/7]">
+        <ChartContainer config={config} className="aspect-16/7">
           <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
             <XAxis dataKey="t" tickLine={false} axisLine={false} minTickGap={24} className="text-[10px]" />

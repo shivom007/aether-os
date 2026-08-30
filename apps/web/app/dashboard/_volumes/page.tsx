@@ -6,8 +6,7 @@ import { api } from "@/lib/api"
 import type { Volume } from "@/lib/types"
 import { VolumesTable } from "@/components/volumes/volumes-table"
 import { CreateVolumeDialog } from "@/components/volumes/create-volume-dialog"
-import { VolumeDrawerTesting } from "@/components/volumes/volume-drawer-testing"
-
+import { VolumeDrawer } from "@/components/volumes/volume-drawer"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
@@ -24,7 +23,7 @@ export default function VolumesPage() {
     <div className="flex flex-col gap-6">
       <header className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Volumes (Testing)</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Volumes</h1>
           <p className="text-sm text-muted-foreground">
             Zero-knowledge encrypted volumes. Root keys never leave your browser.
           </p>
@@ -39,16 +38,13 @@ export default function VolumesPage() {
         volumes={data ?? []}
         isLoading={isLoading}
         onSelect={(v) => setSelectedId(v.id)}
-        baseHref="/dashboard/volumes-testing"
       />
 
       <CreateVolumeDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <VolumeDrawerTesting
+      <VolumeDrawer
         volumeId={selectedId}
         onClose={() => setSelectedId(null)}
       />
-      
-
     </div>
   )
 }

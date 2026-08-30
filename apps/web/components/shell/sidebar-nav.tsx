@@ -18,8 +18,8 @@ import {
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/volumes", label: "Volumes", icon: HardDrive },
-  { href: "/dashboard/volumes-testing", label: "Volumes (Testing)", icon: FlaskConical },
+  // { href: "/dashboard/volumes", label: "Volumes", icon: HardDrive },
+  { href: "/dashboard/volumes", label: "Volumes", icon: FlaskConical },
   { href: "/dashboard/providers", label: "Providers", icon: Cloud },
   { href: "/dashboard/workers", label: "Workers", icon: Server },
   { href: "/dashboard/observability", label: "Observability", icon: Activity },

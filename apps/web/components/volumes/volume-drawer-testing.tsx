@@ -47,7 +47,7 @@ export function VolumeDrawerTesting({
 
   return (
     <Sheet open={!!volumeId} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="w-full sm:max-w-[600px] overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-150 overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{volume?.name ?? "Loading…"}</SheetTitle>
           <SheetDescription>{volume?.description || "No description"}</SheetDescription>
@@ -101,7 +101,7 @@ export function VolumeDrawerTesting({
                 </div>
                 <Separator className="my-3" />
                 <Button asChild variant="outline" className="w-full bg-transparent">
-                  <Link href={`/dashboard/volumes-testing/${volume.id}/browse`}>
+                  <Link href={`/dashboard/volumes/${volume.id}/browse`}>
                     <FolderOpen className="mr-2 h-4 w-4" aria-hidden="true" />
                     Open file browser
                   </Link>
