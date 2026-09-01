@@ -78,7 +78,7 @@ const statTone = {
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-[#050708] text-slate-200">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(0,255,157,0.12),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.1),transparent_26%),linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:auto,auto,40px_40px,40px_40px]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(0,255,157,0.12),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.1),transparent_26%),linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bgsize-[auto,auto,40px_40px,40px_40px]" />
 
       <header className="sticky top-0 z-30 border-b border-emerald-400/10 bg-[#050708]/90 backdrop-blur">
         <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
